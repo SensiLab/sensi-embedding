@@ -52,8 +52,73 @@ record = service.ingest_text("Paris is the capital of France")
 results = service.search_text("capital city in Europe")
 ```
 
+## MCP Server (Claude, Cursor, VS Code Copilot)
+
+Sensi Memory exposes `ingest_text`, `ingest_image`, and `search_memory` as MCP tools for use with Claude Desktop, Cursor, and other agent hosts.
+
+### Run the MCP server
+
+```bash
+# First, install the optional mcp dependency
+pip install mcp
+
+# Start the MCP server
+python -m sensi_memory.mcp_server
+```
+
+### Claude Desktop Configuration
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "sensi-memory": {
+      "command": "python",
+      "args": ["-m", "sensi_memory.mcp_server"],
+      "cwd": "/Users/stephenkrol/Sensi"
+    }
+  }
+}
+```
+
+Replace `/Users/stephenkrol/Sensi` with your actual project path. Restart Claude Desktop after updating.
+
+### Cursor Configuration
+
+Edit `.cursor/config/mcp_servers.json` (or `.cursor/mcp_config.json` depending on version):
+
+```json
+{
+  "mcpServers": {
+    "sensi-memory": {
+      "command": "python",
+      "args": ["-m", "sensi_memory.mcp_server"],
+      "cwd": "/path/to/Sensi"
+    }
+  }
+}
+```
+
+### VS Code Copilot Configuration
+
+Edit `.vscode/settings.json`:
+
+```json
+{
+  "github.copilot.chat.tools": {
+    "sensi-memory": {
+      "command": "python",
+      "args": ["-m", "sensi_memory.mcp_server"],
+      "cwd": "${workspaceFolder}"
+    }
+  }
+}
+```
+
 ## Notes
 
 - The Gemini API key must be provided through `GEMINI_API_KEY`.
 - The code assumes local Chroma persistence and does not manage external database provisioning.
 - Image records store their source path and metadata in Chroma, not the raw binary payload.
+- The MCP server inherits environment variables from your shell. Make sure `GEMINI_API_KEY` is available to the MCP process (e.g., sourced from `.env`).

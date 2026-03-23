@@ -66,8 +66,9 @@ def build_base_metadata(
         "document_id": document_id,
         "modality": modality.value,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "tags": list(metadata.tags),
     }
+    if metadata.tags:
+        base_metadata["tags"] = ",".join(metadata.tags)
     if mime_type:
         base_metadata["mime_type"] = mime_type
     if metadata.attributes:

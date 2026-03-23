@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -19,6 +21,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        load_dotenv()
         gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY is required.")
