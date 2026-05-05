@@ -26,22 +26,22 @@ class GeminiEmbedder:
         self._client = genai.Client(api_key=settings.gemini_api_key)
 
     def embed_document_texts(self, texts: list[str]) -> list[list[float]]:
-        """Generate RETRIEVAL_DOCUMENT embeddings for a batch of text strings."""
-        return self._embed_contents(texts, task_type="RETRIEVAL_DOCUMENT")
+        """Generate SEMANTIC_SIMILARITY embeddings for a batch of text strings."""
+        return self._embed_contents(texts, task_type="SEMANTIC_SIMILARITY")
 
     def embed_query_text(self, text: str) -> list[float]:
-        """Generate a single RETRIEVAL_QUERY embedding for a search query string."""
-        embeddings = self._embed_contents([text], task_type="RETRIEVAL_QUERY")
+        """Generate a single SEMANTIC_SIMILARITY embedding for a search query string."""
+        embeddings = self._embed_contents([text], task_type="SEMANTIC_SIMILARITY")
         return embeddings[0]
 
     def embed_image(self, image_bytes: bytes, mime_type: str, text: str | None) -> list[float]:
-        """Generate a multimodal RETRIEVAL_DOCUMENT embedding combining image bytes and optional caption."""
+        """Generate a multimodal SEMANTIC_SIMILARITY embedding combining image bytes and optional caption."""
         parts: list[types.Part] = []
         if text:
             parts.append(types.Part(text=text))
         parts.append(types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
         content = types.Content(parts=parts)
-        embeddings = self._embed_contents([content], task_type="RETRIEVAL_DOCUMENT")
+        embeddings = self._embed_contents([content], task_type="SEMANTIC_SIMILARITY")
         return embeddings[0]
 
     def _embed_contents(self, contents: list[Any], task_type: str) -> list[list[float]]:
