@@ -3,3 +3,4 @@
 src/sensi_memory.egg-info/
 __pycache__/
 local_storage/
+.venv
