@@ -22,9 +22,9 @@ class MemoryService:
         *,
         settings: Settings,
         embedder: GeminiEmbedder,
-        store: ChromaMemoryStore,
-    ) -> None:
+        store: ChromaMemoryStore) -> None:
         """Wire together the embedder and store with their shared settings."""
+
         self._settings = settings
         self._embedder = embedder
         self._store = store
@@ -45,18 +45,21 @@ class MemoryService:
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
         document_id: str | None = None,
-        chunk: bool = True,
-    ) -> list[StoredRecord]:
+        chunk: bool = True) -> list[StoredRecord]:
         """Chunk, embed, and store text; returns one StoredRecord per chunk."""
+
+
         request = TextIngestRequest(
             text=text,
             metadata=IngestMetadata(tags=tags or [], attributes=metadata or {}),
             document_id=document_id or generate_document_id(),
             chunk=chunk,
         )
+
         normalized_chunks = normalize_text_request(request, self._settings)
         documents = [item.document for item in normalized_chunks]
         embeddings = self._embedder.embed_document_texts(documents)
+
         return self._store.upsert_records(
             ids=[item.record_id for item in normalized_chunks],
             documents=documents,
@@ -71,27 +74,30 @@ class MemoryService:
         text: str | None = None,
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
-        document_id: str | None = None,
-    ) -> StoredRecord:
+        document_id: str | None = None) -> StoredRecord:
         """Embed a PNG or JPEG image (with optional caption) and store it as a single record."""
+
         request = ImageIngestRequest(
             image_path=image_path,
             text=text,
             metadata=IngestMetadata(tags=tags or [], attributes=metadata or {}),
             document_id=document_id or generate_document_id(),
         )
+
         normalized_image = normalize_image_request(request)
         embedding = self._embedder.embed_image(
             image_bytes=normalized_image.image_bytes,
             mime_type=normalized_image.mime_type,
             text=request.text,
         )
+
         [record] = self._store.upsert_records(
             ids=[normalized_image.record_id],
             documents=[normalized_image.document],
             metadatas=[normalized_image.metadata],
             embeddings=[embedding],
         )
+
         return record
 
     def search_text(
@@ -99,9 +105,9 @@ class MemoryService:
         text: str,
         *,
         top_k: int | None = None,
-        metadata_filter: dict[str, Any] | None = None,
-    ) -> SearchResponse:
+        metadata_filter: dict[str, Any] | None = None) -> SearchResponse:
         """Embed the query and retrieve the top-k most similar records from the store."""
+        
         if not text.strip():
             raise ValueError("Search text cannot be empty.")
         query_embedding = self._embedder.embed_query_text(text.strip())

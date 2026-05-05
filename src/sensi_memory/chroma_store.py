@@ -23,15 +23,16 @@ class ChromaMemoryStore:
         ids: list[str],
         documents: list[str],
         metadatas: list[dict[str, Any]],
-        embeddings: list[list[float]],
-    ) -> list[StoredRecord]:
+        embeddings: list[list[float]]) -> list[StoredRecord]:
         """Write or overwrite records in the collection and return them as StoredRecord objects."""
+
         self._collection.upsert(
             ids=ids,
             documents=documents,
             metadatas=metadatas,
             embeddings=embeddings,
         )
+
         return [
             StoredRecord(
                 id=record_id,
@@ -48,14 +49,15 @@ class ChromaMemoryStore:
         *,
         embedding: list[float],
         top_k: int,
-        metadata_filter: dict[str, Any] | None = None,
-    ) -> SearchResponse:
+        metadata_filter: dict[str, Any] | None = None) -> SearchResponse:
         """Find the top_k records nearest to the given embedding, with optional metadata filtering."""
+
         query_kwargs: dict[str, Any] = {
             "query_embeddings": [embedding],
             "n_results": top_k,
             "include": ["documents", "metadatas", "distances"],
         }
+        
         if metadata_filter:
             query_kwargs["where"] = metadata_filter
 
