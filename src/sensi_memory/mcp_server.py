@@ -74,7 +74,9 @@ def search_memory(query: str, top_k: int = 5) -> str:
 
 def main() -> None:
     """Start the MCP server with SSE transport on 0.0.0.0:8001 for network access."""
-    mcp.run(transport="sse", host="0.0.0.0", port=8001)
+    mcp.settings.host = "0.0.0.0"
+    mcp.settings.port = 8001
+    mcp.run(transport="sse")
 
 
 if __name__ == "__main__":
