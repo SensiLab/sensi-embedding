@@ -1,39 +1,89 @@
 # Sensi Memory
 
-Sensi Memory is a small Python package for agent-style ingestion and retrieval of multimodal embeddings.
-It accepts text or image inputs, embeds them with Gemini, and stores them in a local ChromaDB collection.
+Sensi Memory is a Python package for agent-style ingestion and retrieval of multimodal embeddings. It accepts text or image inputs, embeds them with Gemini, and stores them in a local ChromaDB collection.
 
 ## Features
 
-- Ingest text and image inputs
+- Ingest text and images via HTTP API, MCP tools, CLI, or Python
 - Generate embeddings with Gemini's multimodal embedding model
-- Persist vectors and metadata in a local ChromaDB collection
-- Run similarity search with structured results suitable for LLM agents
-- Use either Python APIs or a small CLI
+- Persist vectors and metadata in a ChromaDB collection
+- Run similarity search with structured results and optional metadata filtering
+- Deploy with Docker — HTTP REST API and MCP SSE server share one database
 
-## Setup
+## Interfaces
 
-Use Python 3.11 or newer. The macOS system interpreter at `/usr/bin/python3` is often Python 3.9 and is not supported by this project.
+| Interface | Transport | Best for |
+|---|---|---|
+| HTTP REST API (port 8000) | HTTP/JSON | Scripts, services, non-LLM clients |
+| MCP SSE server (port 8001) | HTTP+SSE | LLM clients (Claude Desktop, Cursor, VS Code) |
+| CLI (`sensi-memory`) | stdin/stdout | One-off commands and shell scripts |
+| Python API | In-process | Direct integration in Python code |
+
+---
+
+## Docker (recommended)
+
+Requires Docker with the Compose plugin. Copy `.env.example` to `.env` and add your `GEMINI_API_KEY`.
+
+```bash
+cp .env.example .env
+# edit .env and set GEMINI_API_KEY
+
+docker compose up --build
+```
+
+This starts two containers that share a single ChromaDB volume:
+
+- **`sensi-http`** on port 8000 — REST API for scripts and non-LLM clients
+- **`sensi-mcp`** on port 8001 — MCP SSE server for LLM clients
+
+See [API.md](API.md) for full endpoint reference.
+
+### Connect an LLM client to the MCP server
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "sensi-memory": {
+      "url": "http://localhost:8001/sse"
+    }
+  }
+}
+```
+
+**Cursor / VS Code** — same URL, configured in each client's MCP settings. Restart the client after saving.
+
+---
+
+## Local setup
+
+Use Python 3.11 or newer. The macOS system interpreter at `/usr/bin/python3` is often Python 3.9 and is not supported.
 
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install -e .[dev]
+pip install --upgrade pip setuptools wheel
+pip install -e .[dev]
 ```
 
-Set the environment variables documented in [.env.example](.env.example).
+Copy `.env.example` to `.env` and set `GEMINI_API_KEY`.
 
-If you see an `onnxruntime` resolution error during `chromadb` installation, verify that the active interpreter is Python 3.11+:
+> If you see an `onnxruntime` error during `chromadb` installation, verify the active interpreter is Python 3.11+ with `python -V`.
+
+### HTTP server
 
 ```bash
-python -V
-which python
+sensi-memory-http
 ```
 
-Chroma requires `onnxruntime>=1.14.1`, and current `onnxruntime` wheels target modern Python versions. Using the system Python 3.9 on macOS will typically fail or resolve incorrectly.
+### MCP server
 
-## CLI Examples
+```bash
+sensi-memory-mcp
+```
+
+### CLI
 
 ```bash
 sensi-memory ingest-text --text "Paris is the capital of France"
@@ -41,84 +91,37 @@ sensi-memory ingest-image --image ./example.png --text "A skyline photo"
 sensi-memory search --text "capital city in Europe"
 ```
 
-## Python Example
+### Python
 
 ```python
 from sensi_memory import MemoryService, Settings
 
 service = MemoryService.from_settings(Settings.from_env())
 
-record = service.ingest_text("Paris is the capital of France")
+records = service.ingest_text("Paris is the capital of France")
 results = service.search_text("capital city in Europe")
 ```
 
-## MCP Server (Claude, Cursor, VS Code Copilot)
+---
 
-Sensi Memory exposes `ingest_text`, `ingest_image`, and `search_memory` as MCP tools for use with Claude Desktop, Cursor, and other agent hosts.
+## Configuration
 
-### Run the MCP server
+All settings are read from environment variables (or a `.env` file).
 
-```bash
-# First, install the optional mcp dependency
-pip install mcp
+| Variable | Default | Description |
+|---|---|---|
+| `GEMINI_API_KEY` | required | Google Gemini API key |
+| `SENSI_CHROMA_PATH` | `./local_storage` | Directory for ChromaDB persistence |
+| `SENSI_CHROMA_COLLECTION` | `sensi_memories` | Collection name |
+| `SENSI_EMBEDDING_MODEL` | `gemini-embedding-2-preview` | Gemini embedding model |
+| `SENSI_EMBEDDING_DIMENSIONS` | `768` | Output dimensionality |
+| `SENSI_DEFAULT_TOP_K` | `5` | Default number of search results |
 
-# Start the MCP server
-python -m sensi_memory.mcp_server
-```
+When running via Docker, `SENSI_CHROMA_PATH` is automatically set to `/app/local_storage` (the mounted volume). You do not need to set it manually.
 
-### Claude Desktop Configuration
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "sensi-memory": {
-      "command": "python",
-      "args": ["-m", "sensi_memory.mcp_server"],
-      "cwd": "/Users/stephenkrol/Sensi"
-    }
-  }
-}
-```
-
-Replace `/Users/stephenkrol/Sensi` with your actual project path. Restart Claude Desktop after updating.
-
-### Cursor Configuration
-
-Edit `.cursor/config/mcp_servers.json` (or `.cursor/mcp_config.json` depending on version):
-
-```json
-{
-  "mcpServers": {
-    "sensi-memory": {
-      "command": "python",
-      "args": ["-m", "sensi_memory.mcp_server"],
-      "cwd": "/path/to/Sensi"
-    }
-  }
-}
-```
-
-### VS Code Copilot Configuration
-
-Edit `.vscode/settings.json`:
-
-```json
-{
-  "github.copilot.chat.tools": {
-    "sensi-memory": {
-      "command": "python",
-      "args": ["-m", "sensi_memory.mcp_server"],
-      "cwd": "${workspaceFolder}"
-    }
-  }
-}
-```
+---
 
 ## Notes
 
-- The Gemini API key must be provided through `GEMINI_API_KEY`.
-- The code assumes local Chroma persistence and does not manage external database provisioning.
-- Image records store their source path and metadata in Chroma, not the raw binary payload.
-- The MCP server inherits environment variables from your shell. Make sure `GEMINI_API_KEY` is available to the MCP process (e.g., sourced from `.env`).
+- Image records store their source path and metadata in ChromaDB, not the raw binary. When ingesting images via the MCP server inside Docker, the path must be accessible from within the container. For remote image uploads, use the HTTP API's `POST /ingest/image` endpoint instead.
+- The ChromaDB SQLite backend serializes writes, so a single-worker server process is used. Do not increase uvicorn workers without switching to a ChromaDB HTTP client.
