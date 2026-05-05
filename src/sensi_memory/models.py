@@ -19,6 +19,7 @@ class IngestMetadata(BaseModel):
 
 
 def generate_document_id() -> str:
+    """Generate a random hex document ID using UUID4."""
     return uuid4().hex
 
 
@@ -62,6 +63,7 @@ def build_base_metadata(
     mime_type: str | None,
     metadata: IngestMetadata,
 ) -> dict[str, Any]:
+    """Build the standard metadata dict shared by all stored records, merging tags and custom attributes."""
     base_metadata: dict[str, Any] = {
         "document_id": document_id,
         "modality": modality.value,

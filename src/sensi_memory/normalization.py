@@ -35,6 +35,7 @@ class NormalizedImageInput:
 
 
 def chunk_text(text: str, max_chars: int) -> list[str]:
+    """Split text into paragraph-aligned chunks no longer than max_chars characters."""
     stripped = text.strip()
     if not stripped:
         raise ValueError("Text input cannot be empty.")
@@ -81,6 +82,7 @@ def normalize_text_request(
     request: TextIngestRequest,
     settings: Settings,
 ) -> list[NormalizedTextChunk]:
+    """Convert a TextIngestRequest into a list of NormalizedTextChunk records with per-chunk metadata."""
     chunks = (
         chunk_text(request.text, settings.max_text_chunk_chars)
         if request.chunk
@@ -109,6 +111,7 @@ def normalize_text_request(
 
 
 def normalize_image_request(request: ImageIngestRequest) -> NormalizedImageInput:
+    """Validate the image path, read its bytes, and return a NormalizedImageInput ready for embedding."""
     image_path = Path(request.image_path).expanduser().resolve()
     if not image_path.exists():
         raise FileNotFoundError(f"Image file not found: {image_path}")

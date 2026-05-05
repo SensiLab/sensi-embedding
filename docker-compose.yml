@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  sensi-http:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sensi-memory:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/app/local_storage
+    env_file:
+      - .env
+    environment:
+      SENSI_CHROMA_PATH: /app/local_storage
+    restart: unless-stopped
+
+  sensi-mcp:
+    image: sensi-memory:latest
+    command: ["sensi-memory-mcp"]
+    ports:
+      - "8001:8001"
+    volumes:
+      - chroma_data:/app/local_storage
+    env_file:
+      - .env
+    environment:
+      SENSI_CHROMA_PATH: /app/local_storage
+    depends_on:
+      - sensi-http
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+    driver: local

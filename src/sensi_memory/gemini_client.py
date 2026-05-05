@@ -21,17 +21,21 @@ class RateLimitExceededError(EmbeddingError):
 
 class GeminiEmbedder:
     def __init__(self, settings: Settings) -> None:
+        """Initialize the Gemini client with the API key and embedding configuration from settings."""
         self._settings = settings
         self._client = genai.Client(api_key=settings.gemini_api_key)
 
     def embed_document_texts(self, texts: list[str]) -> list[list[float]]:
+        """Generate RETRIEVAL_DOCUMENT embeddings for a batch of text strings."""
         return self._embed_contents(texts, task_type="RETRIEVAL_DOCUMENT")
 
     def embed_query_text(self, text: str) -> list[float]:
+        """Generate a single RETRIEVAL_QUERY embedding for a search query string."""
         embeddings = self._embed_contents([text], task_type="RETRIEVAL_QUERY")
         return embeddings[0]
 
     def embed_image(self, image_bytes: bytes, mime_type: str, text: str | None) -> list[float]:
+        """Generate a multimodal RETRIEVAL_DOCUMENT embedding combining image bytes and optional caption."""
         parts: list[types.Part] = []
         if text:
             parts.append(types.Part(text=text))
@@ -41,6 +45,7 @@ class GeminiEmbedder:
         return embeddings[0]
 
     def _embed_contents(self, contents: list[Any], task_type: str) -> list[list[float]]:
+        """Call the Gemini embed_content API with exponential-backoff retries on rate-limit errors."""
         delay = self._settings.base_retry_delay_seconds
 
         for attempt in range(self._settings.max_retries):
@@ -66,6 +71,7 @@ class GeminiEmbedder:
         raise RateLimitExceededError("Gemini embedding retries exhausted.")
 
     def _normalize_embedding(self, values: list[float]) -> list[float]:
+        """L2-normalize the embedding vector; skipped for 3072-dimensional outputs which are pre-normalized."""
         if self._settings.embedding_dimensions == 3072:
             return values
 
@@ -78,6 +84,7 @@ class GeminiEmbedder:
 
 
 def _is_rate_limited(exc: Exception) -> bool:
+    """Return True if the exception looks like a 429 / rate-limit response from the Gemini API."""
     status_code = getattr(exc, "status_code", None)
     if status_code == 429:
         return True

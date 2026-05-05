@@ -72,10 +72,10 @@ def search_memory(query: str, top_k: int = 5) -> str:
     return "\n".join(lines)
 
 
-if __name__ == "__main__":
-    mcp.run()
-
-
 def main() -> None:
-    """Entry point for the MCP server."""
-    mcp.run()
+    """Start the MCP server with SSE transport on 0.0.0.0:8001 for network access."""
+    mcp.run(transport="sse", host="0.0.0.0", port=8001)
+
+
+if __name__ == "__main__":
+    main()

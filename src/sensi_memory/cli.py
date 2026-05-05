@@ -8,6 +8,7 @@ from sensi_memory.service import MemoryService
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser for all sensi-memory CLI subcommands."""
     parser = argparse.ArgumentParser(prog="sensi-memory")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -34,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """Parse CLI arguments and dispatch to ingest-text, ingest-image, or search, printing JSON output."""
     parser = build_parser()
     args = parser.parse_args()
 
@@ -74,6 +76,7 @@ def main() -> None:
 
 
 def _parse_json_dict(value: str) -> dict[str, object]:
+    """Parse a JSON string and raise ValueError if it is not a JSON object."""
     parsed = json.loads(value)
     if not isinstance(parsed, dict):
         raise ValueError("Expected a JSON object.")

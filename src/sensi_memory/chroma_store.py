@@ -10,6 +10,7 @@ from sensi_memory.models import SearchHit, SearchResponse, StoredRecord
 
 class ChromaMemoryStore:
     def __init__(self, settings: Settings) -> None:
+        """Open (or create) the ChromaDB persistent collection at the configured path."""
         self._client = chromadb.PersistentClient(path=str(settings.chroma_path))
         self._collection = self._client.get_or_create_collection(
             name=settings.chroma_collection,
@@ -24,6 +25,7 @@ class ChromaMemoryStore:
         metadatas: list[dict[str, Any]],
         embeddings: list[list[float]],
     ) -> list[StoredRecord]:
+        """Write or overwrite records in the collection and return them as StoredRecord objects."""
         self._collection.upsert(
             ids=ids,
             documents=documents,
@@ -48,6 +50,7 @@ class ChromaMemoryStore:
         top_k: int,
         metadata_filter: dict[str, Any] | None = None,
     ) -> SearchResponse:
+        """Find the top_k records nearest to the given embedding, with optional metadata filtering."""
         query_kwargs: dict[str, Any] = {
             "query_embeddings": [embedding],
             "n_results": top_k,

@@ -24,12 +24,14 @@ class MemoryService:
         embedder: GeminiEmbedder,
         store: ChromaMemoryStore,
     ) -> None:
+        """Wire together the embedder and store with their shared settings."""
         self._settings = settings
         self._embedder = embedder
         self._store = store
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "MemoryService":
+        """Construct a MemoryService with a Gemini embedder and ChromaDB store from settings."""
         return cls(
             settings=settings,
             embedder=GeminiEmbedder(settings),
@@ -45,6 +47,7 @@ class MemoryService:
         document_id: str | None = None,
         chunk: bool = True,
     ) -> list[StoredRecord]:
+        """Chunk, embed, and store text; returns one StoredRecord per chunk."""
         request = TextIngestRequest(
             text=text,
             metadata=IngestMetadata(tags=tags or [], attributes=metadata or {}),
@@ -70,6 +73,7 @@ class MemoryService:
         tags: list[str] | None = None,
         document_id: str | None = None,
     ) -> StoredRecord:
+        """Embed a PNG or JPEG image (with optional caption) and store it as a single record."""
         request = ImageIngestRequest(
             image_path=image_path,
             text=text,
@@ -97,6 +101,7 @@ class MemoryService:
         top_k: int | None = None,
         metadata_filter: dict[str, Any] | None = None,
     ) -> SearchResponse:
+        """Embed the query and retrieve the top-k most similar records from the store."""
         if not text.strip():
             raise ValueError("Search text cannot be empty.")
         query_embedding = self._embedder.embed_query_text(text.strip())

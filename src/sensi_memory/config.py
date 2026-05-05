@@ -21,6 +21,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        """Load settings from environment variables, falling back to a .env file if present."""
         load_dotenv()
         gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
         if not gemini_api_key:
