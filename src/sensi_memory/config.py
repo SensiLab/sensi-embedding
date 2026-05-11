@@ -1,4 +1,4 @@
-from __future__ import annotations
+    from __future__ import annotations
 
 import os
 from dataclasses import dataclass
@@ -12,8 +12,8 @@ class Settings:
     gemini_api_key: str
     chroma_path: Path = Path("./local_storage")
     chroma_collection: str = "sensi_memories"
-    embedding_model: str = "gemini-embedding-2-preview"
-    embedding_dimensions: int = 768
+    embedding_model: str = "gemini-embedding-2"
+    embedding_dimensions: int = 3072
     default_top_k: int = 5
     max_retries: int = 4
     base_retry_delay_seconds: float = 1.0
@@ -31,9 +31,9 @@ class Settings:
         chroma_collection = os.getenv("SENSI_CHROMA_COLLECTION", "sensi_memories")
         embedding_model = os.getenv(
             "SENSI_EMBEDDING_MODEL",
-            "gemini-embedding-2-preview",
+            "gemini-embedding-2",
         )
-        embedding_dimensions = int(os.getenv("SENSI_EMBEDDING_DIMENSIONS", "768"))
+        embedding_dimensions = int(os.getenv("SENSI_EMBEDDING_DIMENSIONS", "3072"))
         default_top_k = int(os.getenv("SENSI_DEFAULT_TOP_K", "5"))
 
         return cls(
