@@ -6,3 +6,14 @@ local_storage/
 .venv
 .DS_Store
 src/.DS_Store
+
+# ignore common image and document file types that may be uploaded as memories
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.pdf
+*.doc
+*.docx
