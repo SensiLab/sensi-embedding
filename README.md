@@ -113,7 +113,7 @@ All settings are read from environment variables (or a `.env` file).
 | `GEMINI_API_KEY` | required | Google Gemini API key |
 | `SENSI_CHROMA_PATH` | `./local_storage` | Directory for ChromaDB persistence |
 | `SENSI_CHROMA_COLLECTION` | `sensi_memories` | Collection name |
-| `SENSI_EMBEDDING_MODEL` | `gemini-embedding-2-preview` | Gemini embedding model |
+| `SENSI_EMBEDDING_MODEL` | `gemini-embedding-2` | Gemini embedding model |
 | `SENSI_EMBEDDING_DIMENSIONS` | `768` | Output dimensionality |
 | `SENSI_DEFAULT_TOP_K` | `5` | Default number of search results |
 
