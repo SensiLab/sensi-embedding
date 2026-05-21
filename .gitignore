@@ -17,5 +17,6 @@ src/.DS_Store
 *.pdf
 *.doc
 *.docx
+*.csv
 
 simple_embedding_test.py

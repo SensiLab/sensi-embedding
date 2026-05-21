@@ -195,16 +195,115 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .card { cursor: pointer; }
+
+    .lightbox-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+      backdrop-filter: blur(4px);
+    }
+    .lightbox-overlay.hidden { display: none; }
+    .lightbox {
+      background: #1a1a1a; border: 1px solid #333; border-radius: 12px;
+      padding: 1.5rem; max-width: 680px; width: 90vw;
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    .lightbox-img { width: 100%; max-height: 60vh; object-fit: contain; border-radius: 8px; background: #252525; }
+    .lightbox-name { font-size: 0.85rem; color: #bbb; word-break: break-all; }
+    .lightbox-actions { display: flex; gap: 0.5rem; align-items: flex-end; }
+    .btn-similar {
+      flex: 1; padding: 0.65rem 1.2rem; background: #fff; color: #000;
+      border: none; border-radius: 8px; font-size: 1rem; font-weight: 600;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn-similar:hover { opacity: 0.85; }
+    .btn-similar:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-close {
+      background: none; border: 1px solid #444; border-radius: 8px;
+      color: #888; padding: 0.65rem 0.75rem; font-size: 0.85rem;
+      cursor: pointer; transition: color 0.15s, border-color 0.15s; white-space: nowrap;
+    }
+    .btn-close:hover { color: #ddd; border-color: #666; }
+
+    .mode-toggle {
+      display: flex;
+      gap: 0.25rem;
+      margin: 0 auto 0.75rem;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 0.2rem;
+      width: fit-content;
+    }
+
+    .mode-btn {
+      padding: 0.3rem 1.1rem;
+      border: none;
+      border-radius: 6px;
+      background: none;
+      color: #888;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .mode-btn.active {
+      background: #fff;
+      color: #000;
+      font-weight: 600;
+    }
+
+    .image-drop-zone {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex: 1;
+      padding: 0.55rem 1rem;
+      background: #1a1a1a;
+      border: 1px dashed #444;
+      border-radius: 8px;
+      color: #888;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      min-height: 44px;
+      overflow: hidden;
+    }
+
+    .image-drop-zone:hover { border-color: #666; color: #bbb; }
+    .image-drop-zone.has-image { border-style: solid; border-color: #555; color: #bbb; }
+
+    #imagePreview {
+      height: 32px;
+      width: 32px;
+      object-fit: cover;
+      border-radius: 4px;
+      flex-shrink: 0;
+      display: none;
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Sensi Search</h1>
-    <p>Query your embedding database with natural language</p>
+    <p>Query your embedding database with text or an image</p>
   </header>
+
+  <div class="mode-toggle">
+    <button type="button" class="mode-btn active" id="modeText">Text</button>
+    <button type="button" class="mode-btn" id="modeImage">Image</button>
+  </div>
 
   <form class="search-form" id="searchForm">
     <input type="text" id="queryInput" placeholder="e.g. a cat sitting on a sofa" autocomplete="off" required />
+    <label class="image-drop-zone" id="dropZone" for="imageInput" style="display:none">
+      <img id="imagePreview" alt="" />
+      <span id="dropZoneLabel">Drop image here or click to upload</span>
+      <input type="file" id="imageInput" accept="image/jpeg,image/png" style="display:none" />
+    </label>
     <div class="topk-wrap">
       <label for="topkInput">Top K</label>
       <input type="number" id="topkInput" value="5" min="1" max="50" />
@@ -215,50 +314,133 @@
   <div id="status"></div>
   <div class="results-grid" id="results"></div>
 
+  <div class="lightbox-overlay hidden" id="lightboxOverlay">
+    <div class="lightbox" role="dialog" aria-modal="true">
+      <img class="lightbox-img" id="lightboxImg" src="" alt="" />
+      <div class="lightbox-name" id="lightboxName"></div>
+      <div class="lightbox-actions">
+        <div class="topk-wrap">
+          <label for="lightboxTopK">Top K</label>
+          <input type="number" id="lightboxTopK" value="5" min="1" max="50" />
+        </div>
+        <button class="btn-similar" id="findSimilarBtn">Find Similar</button>
+        <button class="btn-close" id="lightboxClose">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    let activeRecordId = null;
+    let currentMode = 'text';
+    let selectedFile = null;
+
     const form = document.getElementById('searchForm');
     const queryInput = document.getElementById('queryInput');
     const topkInput = document.getElementById('topkInput');
     const searchBtn = document.getElementById('searchBtn');
     const statusEl = document.getElementById('status');
     const resultsEl = document.getElementById('results');
+    const dropZone = document.getElementById('dropZone');
+    const imageInput = document.getElementById('imageInput');
+    const imagePreview = document.getElementById('imagePreview');
+    const dropZoneLabel = document.getElementById('dropZoneLabel');
 
-    form.addEventListener('submit', async (e) => {
+    document.getElementById('modeText').addEventListener('click', () => setMode('text'));
+    document.getElementById('modeImage').addEventListener('click', () => setMode('image'));
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('modeText').classList.toggle('active', mode === 'text');
+      document.getElementById('modeImage').classList.toggle('active', mode === 'image');
+      queryInput.style.display = mode === 'text' ? '' : 'none';
+      queryInput.required = mode === 'text';
+      dropZone.style.display = mode === 'image' ? '' : 'none';
+    }
+
+    imageInput.addEventListener('change', () => {
+      const file = imageInput.files[0];
+      if (file) selectFile(file);
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
-      const query = queryInput.value.trim();
-      const topK = parseInt(topkInput.value, 10) || 5;
-      if (!query) return;
+      dropZone.style.borderColor = '#888';
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.borderColor = '';
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '';
+      const file = e.dataTransfer?.files[0];
+      if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
+        selectFile(file);
+      }
+    });
 
+    function selectFile(file) {
+      selectedFile = file;
+      const url = URL.createObjectURL(file);
+      imagePreview.src = url;
+      imagePreview.style.display = 'block';
+      dropZoneLabel.textContent = file.name;
+      dropZone.classList.add('has-image');
+    }
+
+    async function runSearch(searchFn) {
       searchBtn.disabled = true;
       statusEl.innerHTML = '<span class="spinner"></span>Searching…';
       resultsEl.innerHTML = '';
-
       try {
-        const res = await fetch('/api/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: query, top_k: topK }),
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(err.detail || res.statusText);
-        }
-
-        const data = await res.json();
-        const hits = data.hits || [];
-
+        const hits = await searchFn();
         if (hits.length === 0) {
           statusEl.textContent = 'No results found.';
           return;
         }
-
         statusEl.textContent = `${hits.length} result${hits.length !== 1 ? 's' : ''}`;
         resultsEl.innerHTML = hits.map(hit => renderCard(hit)).join('');
       } catch (err) {
         statusEl.textContent = `Error: ${err.message}`;
       } finally {
         searchBtn.disabled = false;
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const topK = parseInt(topkInput.value, 10) || 5;
+
+      if (currentMode === 'text') {
+        const query = queryInput.value.trim();
+        if (!query) return;
+        await runSearch(async () => {
+          const res = await fetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: query, top_k: topK }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || res.statusText);
+          }
+          return (await res.json()).hits || [];
+        });
+      } else {
+        if (!selectedFile) {
+          statusEl.textContent = 'Please select an image to search.';
+          return;
+        }
+        await runSearch(async () => {
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+          formData.append('top_k', topK);
+          const res = await fetch('/api/search-by-image', { method: 'POST', body: formData });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || res.statusText);
+          }
+          return (await res.json()).hits || [];
+        });
       }
     });
 
@@ -271,7 +453,7 @@
         const filepath = hit.metadata?.filepath || '';
         const imgSrc = filepath ? `/api/image?path=${encodeURIComponent(filepath)}` : '';
         return `
-          <div class="card">
+          <div class="card" data-record-id="${escapeHtml(hit.id)}" data-filename="${escapeHtml(filename)}" data-src="${escapeHtml(imgSrc)}" onclick="openLightbox(this)">
             ${imgSrc
               ? `<img class="card-image" src="${imgSrc}" alt="${escapeHtml(filename)}"
                    onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
@@ -308,6 +490,57 @@
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
+
+    function openLightbox(cardEl) {
+      activeRecordId = cardEl.dataset.recordId;
+      document.getElementById('lightboxImg').src = cardEl.dataset.src;
+      document.getElementById('lightboxImg').alt = cardEl.dataset.filename;
+      document.getElementById('lightboxName').textContent = cardEl.dataset.filename;
+      document.getElementById('lightboxOverlay').classList.remove('hidden');
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightboxOverlay').classList.add('hidden');
+      activeRecordId = null;
+    }
+
+    document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
+    document.getElementById('lightboxOverlay').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeLightbox();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
+
+    document.getElementById('findSimilarBtn').addEventListener('click', async () => {
+      if (!activeRecordId) return;
+      const topK = parseInt(document.getElementById('lightboxTopK').value, 10) || 5;
+      const btn = document.getElementById('findSimilarBtn');
+      const sourceName = document.getElementById('lightboxName').textContent;
+
+      btn.disabled = true;
+      btn.textContent = 'Searching…';
+      try {
+        const res = await fetch('/api/similar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ record_id: activeRecordId, top_k: topK }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || res.statusText);
+        }
+        const data = await res.json();
+        const hits = data.hits || [];
+        closeLightbox();
+        statusEl.textContent = `Similar to: ${sourceName} — ${hits.length} result${hits.length !== 1 ? 's' : ''}`;
+        resultsEl.innerHTML = hits.map(hit => renderCard(hit)).join('');
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        closeLightbox();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Find Similar';
+      }
+    });
   </script>
 </body>
 </html>

@@ -200,6 +200,51 @@ curl -X POST http://localhost:8000/search \
 
 ---
 
+### `GET /export/csv`
+
+Export every record in the database as a CSV file download. Embeddings are excluded. All metadata fields appear as columns; fields not present on a given record are left blank.
+
+**Response `200 OK`** — `text/csv` file attachment (`export.csv`)
+
+The CSV contains a header row followed by one row per stored record. The fixed columns come first, followed by all metadata keys found across the dataset (order reflects insertion order):
+
+| Column | Description |
+|---|---|
+| `id` | Unique record ID |
+| `document_id` | Parent document ID |
+| `modality` | `"text"` or `"image"` |
+| `document` | Stored text or image caption |
+| `document_id` *(metadata)* | Repeated in metadata columns |
+| `modality` *(metadata)* | Repeated in metadata columns |
+| `created_at` | ISO 8601 UTC timestamp |
+| `mime_type` | e.g. `"text/plain"`, `"image/jpeg"` |
+| `tags` | Comma-separated tags (if set) |
+| `chunk_index` | Text records only |
+| `chunk_count` | Text records only |
+| `source_path` | Image records only |
+| `filename` | Image records only |
+| *(custom fields)* | Any user-supplied metadata attributes |
+
+**Example request**
+```bash
+curl -o export.csv http://localhost:8000/export/csv
+```
+
+**Example output (truncated)**
+```
+id,document_id,modality,document,created_at,mime_type,tags,chunk_index,chunk_count,...
+abc123:chunk:0,abc123,text,Paris is the capital of France.,2026-05-05T12:00:00+00:00,text/plain,geography,0,1,...
+def456,def456,image,Sunset over the mountains,2026-05-05T12:01:00+00:00,image/jpeg,photo,,,,...
+```
+
+**Error responses**
+
+| Status | When |
+|---|---|
+| `500` | Unexpected server error reading from ChromaDB |
+
+---
+
 ## Data models
 
 ### `StoredRecord`

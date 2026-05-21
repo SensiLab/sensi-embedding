@@ -116,3 +116,42 @@ class MemoryService:
             top_k=top_k or self._settings.default_top_k,
             metadata_filter=metadata_filter,
         )
+
+    def search_similar_by_id(
+        self,
+        record_id: str,
+        *,
+        top_k: int | None = None,
+    ) -> SearchResponse:
+        """Find the top-k records most similar to the stored embedding for record_id."""
+        embedding = self._store.get_embedding_by_id(record_id)
+        if embedding is None:
+            raise ValueError(f"Record not found: {record_id}")
+        effective_k = top_k or self._settings.default_top_k
+        response = self._store.query(embedding=embedding, top_k=effective_k + 1)
+        hits = [h for h in response.hits if h.id != record_id][:effective_k]
+        return SearchResponse(hits=hits)
+
+    def search_image(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        *,
+        top_k: int | None = None,
+        metadata_filter: dict[str, Any] | None = None,
+    ) -> SearchResponse:
+        """Embed an image and retrieve the top-k most similar records without storing it."""
+        embedding = self._embedder.embed_image(
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            text=None,
+        )
+        return self._store.query(
+            embedding=embedding,
+            top_k=top_k or self._settings.default_top_k,
+            metadata_filter=metadata_filter,
+        )
+
+    def export_all(self) -> list[StoredRecord]:
+        """Return all stored records without embeddings."""
+        return self._store.get_all_records()

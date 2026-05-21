@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import tempfile
@@ -10,6 +12,7 @@ from typing import Any, AsyncGenerator
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from sensi_memory.config import Settings
@@ -135,6 +138,78 @@ def search(body: SearchRequest) -> SearchResponse:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except EmbeddingError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+
+class SimilarRequest(BaseModel):
+    """Request body for the POST /similar endpoint."""
+
+    record_id: str
+    top_k: int | None = Field(default=None, ge=1)
+
+
+ALLOWED_IMAGE_SEARCH_TYPES = {"image/jpeg", "image/png"}
+
+
+@app.post("/search/image", response_model=SearchResponse, status_code=status.HTTP_200_OK)
+async def search_image(
+    file: UploadFile = File(...),
+    top_k: int = Form(default=5, ge=1),
+) -> SearchResponse:
+    """Embed an uploaded image and search for similar records without storing the image."""
+    if file.content_type not in ALLOWED_IMAGE_SEARCH_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only JPEG and PNG images are supported",
+        )
+    image_bytes = await file.read()
+    try:
+        return _service().search_image(image_bytes, file.content_type, top_k=top_k)
+    except EmbeddingError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+
+@app.post("/similar", response_model=SearchResponse, status_code=status.HTTP_200_OK)
+def similar(body: SimilarRequest) -> SearchResponse:
+    """Find records with embeddings nearest to the stored embedding for the given record ID."""
+    try:
+        return _service().search_similar_by_id(body.record_id, top_k=body.top_k)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@app.get("/export/csv", status_code=status.HTTP_200_OK)
+def export_csv() -> StreamingResponse:
+    """Return all stored records as a CSV file, excluding embeddings."""
+    records = _service().export_all()
+
+    all_meta_keys: list[str] = []
+    seen: set[str] = set()
+    for r in records:
+        for k in r.metadata:
+            if k not in seen:
+                seen.add(k)
+                all_meta_keys.append(k)
+
+    fieldnames = ["id", "document_id", "modality", "document"] + all_meta_keys
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for r in records:
+        writer.writerow({
+            "id": r.id,
+            "document_id": r.document_id,
+            "modality": r.modality,
+            "document": r.document,
+            **r.metadata,
+        })
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=\"export.csv\""},
+    )
 
 
 def main() -> None:

@@ -39,7 +39,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /Users/rtdbot/sensi-imessage-retrival/Rowan:/Users/rtdbot/sensi-imessage-retrival/Rowan:ro
+      - /Users/rtdbot/sensi-imessage-retrival/data:/Users/rtdbot/sensi-imessage-retrival/data:ro
     environment:
       SENSI_HTTP_URL: http://sensi-http:8000
     depends_on:

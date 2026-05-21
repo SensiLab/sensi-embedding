@@ -86,3 +86,30 @@ class ChromaMemoryStore:
             )
 
         return SearchResponse(hits=hits)
+
+    def get_embedding_by_id(self, record_id: str) -> list[float] | None:
+        """Return the stored embedding vector for a single record ID, or None if not found."""
+        result = self._collection.get(ids=[record_id], include=["embeddings"])
+        embeddings = result.get("embeddings")
+        if embeddings is None or len(embeddings) == 0:
+            return None
+        return list(embeddings[0])
+
+    def get_all_records(self) -> list[StoredRecord]:
+        """Return every record in the collection, excluding embeddings."""
+        result = self._collection.get(include=["documents", "metadatas"])
+        records = []
+        for record_id, document, metadata in zip(
+            result["ids"], result["documents"], result["metadatas"], strict=False
+        ):
+            metadata = metadata or {}
+            records.append(
+                StoredRecord(
+                    id=record_id,
+                    document_id=str(metadata.get("document_id", "")),
+                    modality=metadata.get("modality", ""),
+                    document=document,
+                    metadata=metadata,
+                )
+            )
+        return records
