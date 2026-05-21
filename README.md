@@ -16,6 +16,7 @@ Sensi Memory is a Python package for agent-style ingestion and retrieval of mult
 |---|---|---|
 | HTTP REST API (port 8000) | HTTP/JSON | Scripts, services, non-LLM clients |
 | MCP SSE server (port 8001) | HTTP+SSE | LLM clients (Claude Desktop, Cursor, VS Code) |
+| Visualisation UI (port 3000) | Browser | Exploring the database visually, searching by text or image |
 | CLI (`sensi-memory`) | stdin/stdout | One-off commands and shell scripts |
 | Python API | In-process | Direct integration in Python code |
 
@@ -32,10 +33,11 @@ cp .env.example .env
 docker compose up --build
 ```
 
-This starts two containers that share a single ChromaDB volume:
+This starts three containers that share a single ChromaDB volume:
 
 - **`sensi-http`** on port 8000 — REST API for scripts and non-LLM clients
 - **`sensi-mcp`** on port 8001 — MCP SSE server for LLM clients
+- **`sensi-visualisation`** on port 3000 — browser UI for exploring the database, searching by text, or searching by image upload
 
 See [API.md](API.md) for full endpoint reference.
 
@@ -122,6 +124,10 @@ service = MemoryService.from_settings(Settings.from_env())
 
 records = service.ingest_text("Paris is the capital of France")
 results = service.search_text("capital city in Europe")
+
+# Search by image without storing it
+image_bytes = open("photo.jpg", "rb").read()
+results = service.search_image(image_bytes, "image/jpeg", top_k=5)
 ```
 
 ---

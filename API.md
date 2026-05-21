@@ -200,6 +200,54 @@ curl -X POST http://localhost:8000/search \
 
 ---
 
+### `POST /search/image`
+
+Embed an uploaded image and return the most semantically similar records from the database. The image is **not stored** — it is embedded transiently and discarded after the query.
+
+**Content-Type:** `multipart/form-data`
+
+**Form fields**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `file` | file | yes | PNG or JPEG image file |
+| `top_k` | integer | no | Number of results to return (default: 5, minimum: 1) |
+
+**Example request**
+```bash
+curl -X POST http://localhost:8000/search/image \
+  -F "file=@/path/to/photo.jpg" \
+  -F "top_k=5"
+```
+
+**Response `200 OK`** — same structure as `POST /search`
+
+```json
+{
+  "hits": [
+    {
+      "id": "def456",
+      "document": "Sunset over the mountains",
+      "metadata": {
+        "modality": "image",
+        "filename": "photo.jpg",
+        "filepath": "/path/to/photo.jpg"
+      },
+      "distance": 0.087
+    }
+  ]
+}
+```
+
+**Error responses**
+
+| Status | When |
+|---|---|
+| `415` | File is not JPEG or PNG |
+| `502` | Gemini API embedding call failed |
+
+---
+
 ### `GET /export/csv`
 
 Export every record in the database as a CSV file download. Embeddings are excluded. All metadata fields appear as columns; fields not present on a given record are left blank.
@@ -350,9 +398,10 @@ The MCP server exposes the same ingest and search operations as MCP tools over H
 docker compose up --build
 ```
 
-This starts two containers sharing the same ChromaDB volume:
+This starts three containers sharing the same ChromaDB volume:
 - `sensi-http` on port 8000 — REST API for scripts and non-LLM clients
 - `sensi-mcp` on port 8001 — MCP SSE server for LLM clients
+- `sensi-visualisation` on port 3000 — browser UI for search and image upload
 
 **Locally (after `pip install -e .`)**
 ```bash
