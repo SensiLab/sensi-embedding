@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+import mimetypes
+import os
+from pathlib import Path
+from typing import Any
+
+import httpx
+from fastapi import FastAPI, HTTPException, Query, status
+from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel, Field
+
+SENSI_HTTP_URL = os.environ.get("SENSI_HTTP_URL", "http://localhost:8000")
+STATIC_DIR = Path(__file__).parent / "static"
+ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+class SearchRequest(BaseModel):
+    text: str
+    top_k: int = Field(default=5, ge=1)
+
+
+app = FastAPI(title="Sensi Visualisation", version="0.1.0")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index() -> HTMLResponse:
+    return HTMLResponse((STATIC_DIR / "index.html").read_text())
+
+
+@app.post("/api/search")
+async def search(body: SearchRequest) -> dict[str, Any]:
+    formatted = f"task: search result | query: {body.text}"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(
+                f"{SENSI_HTTP_URL}/search",
+                json={"text": formatted, "top_k": body.top_k},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=exc.response.status_code,
+                detail=exc.response.text,
+            )
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not reach search service: {exc}",
+            )
+    return response.json()
+
+
+@app.get("/api/image")
+async def serve_image(path: str = Query(...)) -> FileResponse:
+    image_path = Path(path)
+    if not image_path.exists() or not image_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    mime_type, _ = mimetypes.guess_type(image_path.name)
+    if mime_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Not an image")
+
+    return FileResponse(image_path, media_type=mime_type)

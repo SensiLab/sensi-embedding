@@ -30,3 +30,18 @@ services:
     depends_on:
       - sensi-http-v2
     restart: unless-stopped
+
+  sensi-visualisation-v2:
+    build:
+      context: src/visualisation
+      dockerfile: Dockerfile
+    image: sensi-visualisation:v2
+    ports:
+      - "3001:3000"
+    volumes:
+      - /Users/rtdbot/sensi-imessage-retrival/Rowan:/Users/rtdbot/sensi-imessage-retrival/Rowan:ro
+    environment:
+      SENSI_HTTP_URL: http://sensi-http-v2:8000
+    depends_on:
+      - sensi-http-v2
+    restart: unless-stopped

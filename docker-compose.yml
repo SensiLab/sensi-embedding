@@ -31,6 +31,21 @@ services:
       - sensi-http
     restart: unless-stopped
 
+  sensi-visualisation:
+    build:
+      context: src/visualisation
+      dockerfile: Dockerfile
+    image: sensi-visualisation:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - /Users/rtdbot/sensi-imessage-retrival/Rowan:/Users/rtdbot/sensi-imessage-retrival/Rowan:ro
+    environment:
+      SENSI_HTTP_URL: http://sensi-http:8000
+    depends_on:
+      - sensi-http
+    restart: unless-stopped
+
 volumes:
   chroma_data:
     driver: local

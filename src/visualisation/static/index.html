@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sensi Search</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f0f;
+      color: #e8e8e8;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+
+    header p {
+      margin-top: 0.4rem;
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .search-form {
+      display: flex;
+      gap: 0.5rem;
+      max-width: 700px;
+      margin: 0 auto 2rem;
+      align-items: flex-end;
+    }
+
+    .search-form input[type="text"] {
+      flex: 1;
+      padding: 0.65rem 1rem;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #e8e8e8;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .search-form input[type="text"]:focus {
+      border-color: #555;
+    }
+
+    .topk-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .topk-wrap label {
+      font-size: 0.75rem;
+      color: #666;
+      text-align: center;
+    }
+
+    .search-form input[type="number"] {
+      width: 64px;
+      padding: 0.65rem 0.5rem;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #e8e8e8;
+      font-size: 1rem;
+      text-align: center;
+      outline: none;
+    }
+
+    .search-form button {
+      padding: 0.65rem 1.4rem;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    .search-form button:hover { opacity: 0.85; }
+    .search-form button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #status {
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+      min-height: 1.2em;
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-image {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      background: #252525;
+      display: block;
+    }
+
+    .card-placeholder {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #252525;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+      font-size: 0.8rem;
+      gap: 0.5rem;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .card-placeholder svg {
+      opacity: 0.4;
+    }
+
+    .card-body {
+      padding: 0.65rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      flex: 1;
+    }
+
+    .card-name {
+      font-size: 0.82rem;
+      color: #bbb;
+      word-break: break-all;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-excerpt {
+      font-size: 0.8rem;
+      color: #999;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-distance {
+      font-size: 0.75rem;
+      color: #555;
+      margin-top: auto;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #444;
+      border-top-color: #aaa;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sensi Search</h1>
+    <p>Query your embedding database with natural language</p>
+  </header>
+
+  <form class="search-form" id="searchForm">
+    <input type="text" id="queryInput" placeholder="e.g. a cat sitting on a sofa" autocomplete="off" required />
+    <div class="topk-wrap">
+      <label for="topkInput">Top K</label>
+      <input type="number" id="topkInput" value="5" min="1" max="50" />
+    </div>
+    <button type="submit" id="searchBtn">Search</button>
+  </form>
+
+  <div id="status"></div>
+  <div class="results-grid" id="results"></div>
+
+  <script>
+    const form = document.getElementById('searchForm');
+    const queryInput = document.getElementById('queryInput');
+    const topkInput = document.getElementById('topkInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const statusEl = document.getElementById('status');
+    const resultsEl = document.getElementById('results');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const query = queryInput.value.trim();
+      const topK = parseInt(topkInput.value, 10) || 5;
+      if (!query) return;
+
+      searchBtn.disabled = true;
+      statusEl.innerHTML = '<span class="spinner"></span>Searching…';
+      resultsEl.innerHTML = '';
+
+      try {
+        const res = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: query, top_k: topK }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || res.statusText);
+        }
+
+        const data = await res.json();
+        const hits = data.hits || [];
+
+        if (hits.length === 0) {
+          statusEl.textContent = 'No results found.';
+          return;
+        }
+
+        statusEl.textContent = `${hits.length} result${hits.length !== 1 ? 's' : ''}`;
+        resultsEl.innerHTML = hits.map(hit => renderCard(hit)).join('');
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+      } finally {
+        searchBtn.disabled = false;
+      }
+    });
+
+    function renderCard(hit) {
+      const modality = hit.metadata?.modality || 'text';
+      const distance = typeof hit.distance === 'number' ? hit.distance.toFixed(4) : '—';
+      const filename = hit.metadata?.filename || hit.id || 'unknown';
+
+      if (modality === 'image') {
+        const filepath = hit.metadata?.filepath || '';
+        const imgSrc = filepath ? `/api/image?path=${encodeURIComponent(filepath)}` : '';
+        return `
+          <div class="card">
+            ${imgSrc
+              ? `<img class="card-image" src="${imgSrc}" alt="${escapeHtml(filename)}"
+                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+                 /><div class="card-placeholder" style="display:none">${placeholderIcon()}${escapeHtml(filename)}</div>`
+              : `<div class="card-placeholder">${placeholderIcon()}No path stored</div>`
+            }
+            <div class="card-body">
+              <div class="card-name">${escapeHtml(filename)}</div>
+              <div class="card-distance">distance ${distance}</div>
+            </div>
+          </div>`;
+      }
+
+      const excerpt = hit.document || '';
+      return `
+        <div class="card">
+          <div class="card-body" style="padding-top:0.9rem">
+            <div class="card-name">${escapeHtml(filename)}</div>
+            <div class="card-excerpt">${escapeHtml(excerpt)}</div>
+            <div class="card-distance">distance ${distance}</div>
+          </div>
+        </div>`;
+    }
+
+    function placeholderIcon() {
+      return `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>`;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
