@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  sensi-http-v2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sensi-memory:v2
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./local_storage:/app/local_storage
+    env_file:
+      - .env
+    environment:
+      SENSI_CHROMA_PATH: /app/local_storage
+    restart: unless-stopped
+
+  sensi-mcp-v2:
+    image: sensi-memory:v2
+    command: ["sensi-memory-mcp"]
+    ports:
+      - "8003:8001"
+    volumes:
+      - ./local_storage:/app/local_storage
+    env_file:
+      - .env
+    environment:
+      SENSI_CHROMA_PATH: /app/local_storage
+    depends_on:
+      - sensi-http-v2
+    restart: unless-stopped

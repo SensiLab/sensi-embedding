@@ -39,6 +39,28 @@ This starts two containers that share a single ChromaDB volume:
 
 See [API.md](API.md) for full endpoint reference.
 
+### Dev instance (separate database, data on disk)
+
+`docker-compose.dev.yml` runs the same stack but stores the database in `./local_storage` inside the project directory instead of a named Docker volume. Useful for development when you want to inspect or reset the data directly.
+
+Since both stacks use ports 8000 and 8001, only one can run at a time.
+
+**Start the dev stack** (stop the original first):
+
+```bash
+docker compose down
+docker compose -f docker-compose.dev.yml -p sensi-dev up -d --build
+```
+
+**Switch back to the original stack:**
+
+```bash
+docker compose -f docker-compose.dev.yml -p sensi-dev down
+docker compose up -d
+```
+
+Each stack's database is fully isolated — stopping one never affects the other's data.
+
 ### Connect an LLM client to the MCP server
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
