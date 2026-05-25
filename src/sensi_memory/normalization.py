@@ -93,9 +93,11 @@ def normalize_text_request(
     for index, chunk in enumerate(chunks):
         metadata = build_base_metadata(
             document_id=request.document_id,
+            sender=request.sender,
             modality=Modality.TEXT,
             mime_type="text/plain",
-            metadata=request.metadata,
+            tags=request.tags,
+            attributes=request.metadata,
         )
         metadata["chunk_index"] = index
         metadata["chunk_count"] = len(chunks)
@@ -125,15 +127,18 @@ def normalize_image_request(request: ImageIngestRequest) -> NormalizedImageInput
         )
 
     image_bytes = image_path.read_bytes()
-    document = request.text.strip() if request.text else image_path.name
+    source_name = Path(request.source_path).name if request.source_path else None
+    document = request.text.strip() if request.text else (source_name or image_path.name)
     metadata = build_base_metadata(
         document_id=request.document_id,
+        sender=request.sender,
         modality=Modality.IMAGE,
         mime_type=mime_type,
-        metadata=request.metadata,
+        tags=request.tags,
+        attributes=request.metadata,
     )
-    metadata["source_path"] = str(image_path)
-    metadata["filename"] = image_path.name
+    if request.source_path:
+        metadata["source_path"] = request.source_path
 
     return NormalizedImageInput(
         record_id=request.document_id,

@@ -228,6 +228,34 @@
     }
     .btn-close:hover { color: #ddd; border-color: #666; }
 
+    .view-toggle {
+      display: flex;
+      gap: 0.25rem;
+      margin: 0 auto 1.25rem;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 0.2rem;
+      width: fit-content;
+    }
+
+    .view-btn {
+      padding: 0.3rem 1.1rem;
+      border: none;
+      border-radius: 6px;
+      background: none;
+      color: #888;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .view-btn.active {
+      background: #fff;
+      color: #000;
+      font-weight: 600;
+    }
+
     .mode-toggle {
       display: flex;
       gap: 0.25rem;
@@ -284,6 +312,87 @@
       flex-shrink: 0;
       display: none;
     }
+
+    /* ── Graph view ── */
+    #graphView { display: none; }
+
+    .graph-controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+      justify-content: center;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .graph-controls .topk-wrap label {
+      font-size: 0.75rem;
+      color: #666;
+      display: block;
+      text-align: center;
+      margin-bottom: 0.25rem;
+    }
+
+    .graph-controls input[type="number"] {
+      width: 80px;
+      padding: 0.65rem 0.5rem;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #e8e8e8;
+      font-size: 1rem;
+      text-align: center;
+      outline: none;
+    }
+
+    .graph-controls button {
+      padding: 0.65rem 1.4rem;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .graph-controls button:hover { opacity: 0.85; }
+    .graph-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #graphStatus {
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+      min-height: 1.2em;
+    }
+
+    #graphSvg {
+      display: block;
+      width: 100%;
+      height: calc(100vh - 280px);
+      min-height: 400px;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 10px;
+    }
+
+    #graphTooltip {
+      position: fixed;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 0.35rem 0.6rem;
+      font-size: 0.8rem;
+      color: #ccc;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.1s;
+      max-width: 220px;
+      word-break: break-all;
+      z-index: 500;
+    }
   </style>
 </head>
 <body>
@@ -292,28 +401,51 @@
     <p>Query your embedding database with text or an image</p>
   </header>
 
-  <div class="mode-toggle">
-    <button type="button" class="mode-btn active" id="modeText">Text</button>
-    <button type="button" class="mode-btn" id="modeImage">Image</button>
+  <!-- Top-level view toggle -->
+  <div class="view-toggle">
+    <button type="button" class="view-btn active" id="viewSearch">Search</button>
+    <button type="button" class="view-btn" id="viewGraph">Graph</button>
   </div>
 
-  <form class="search-form" id="searchForm">
-    <input type="text" id="queryInput" placeholder="e.g. a cat sitting on a sofa" autocomplete="off" required />
-    <label class="image-drop-zone" id="dropZone" for="imageInput" style="display:none">
-      <img id="imagePreview" alt="" />
-      <span id="dropZoneLabel">Drop image here or click to upload</span>
-      <input type="file" id="imageInput" accept="image/jpeg,image/png" style="display:none" />
-    </label>
-    <div class="topk-wrap">
-      <label for="topkInput">Top K</label>
-      <input type="number" id="topkInput" value="5" min="1" max="50" />
+  <!-- Search view -->
+  <div id="searchView">
+    <div class="mode-toggle">
+      <button type="button" class="mode-btn active" id="modeText">Text</button>
+      <button type="button" class="mode-btn" id="modeImage">Image</button>
     </div>
-    <button type="submit" id="searchBtn">Search</button>
-  </form>
 
-  <div id="status"></div>
-  <div class="results-grid" id="results"></div>
+    <form class="search-form" id="searchForm">
+      <input type="text" id="queryInput" placeholder="e.g. a cat sitting on a sofa" autocomplete="off" required />
+      <label class="image-drop-zone" id="dropZone" for="imageInput" style="display:none">
+        <img id="imagePreview" alt="" />
+        <span id="dropZoneLabel">Drop image here or click to upload</span>
+        <input type="file" id="imageInput" accept="image/jpeg,image/png" style="display:none" />
+      </label>
+      <div class="topk-wrap">
+        <label for="topkInput">Top K</label>
+        <input type="number" id="topkInput" value="5" min="1" max="50" />
+      </div>
+      <button type="submit" id="searchBtn">Search</button>
+    </form>
 
+    <div id="status"></div>
+    <div class="results-grid" id="results"></div>
+  </div>
+
+  <!-- Graph view -->
+  <div id="graphView">
+    <div class="graph-controls">
+      <div class="topk-wrap">
+        <label for="thresholdInput">Distance threshold</label>
+        <input type="number" id="thresholdInput" value="0.4" min="0.01" max="2.0" step="0.05" />
+      </div>
+      <button type="button" id="loadGraphBtn">Load Graph</button>
+    </div>
+    <div id="graphStatus"></div>
+    <svg id="graphSvg"></svg>
+  </div>
+
+  <!-- Shared lightbox -->
   <div class="lightbox-overlay hidden" id="lightboxOverlay">
     <div class="lightbox" role="dialog" aria-modal="true">
       <img class="lightbox-img" id="lightboxImg" src="" alt="" />
@@ -329,11 +461,17 @@
     </div>
   </div>
 
+  <div id="graphTooltip"></div>
+
   <script>
+    // ── Shared state ──────────────────────────────────────────────
     let activeRecordId = null;
     let currentMode = 'text';
     let selectedFile = null;
+    let activeView = 'search';
+    let graphSimulation = null;
 
+    // ── DOM refs ──────────────────────────────────────────────────
     const form = document.getElementById('searchForm');
     const queryInput = document.getElementById('queryInput');
     const topkInput = document.getElementById('topkInput');
@@ -345,6 +483,20 @@
     const imagePreview = document.getElementById('imagePreview');
     const dropZoneLabel = document.getElementById('dropZoneLabel');
 
+    // ── View toggle ───────────────────────────────────────────────
+    document.getElementById('viewSearch').addEventListener('click', () => setView('search'));
+    document.getElementById('viewGraph').addEventListener('click', () => setView('graph'));
+
+    function setView(view) {
+      activeView = view;
+      document.getElementById('viewSearch').classList.toggle('active', view === 'search');
+      document.getElementById('viewGraph').classList.toggle('active', view === 'graph');
+      document.getElementById('searchView').style.display = view === 'search' ? '' : 'none';
+      document.getElementById('graphView').style.display = view === 'graph' ? 'block' : 'none';
+      if (view === 'graph') loadGraph();
+    }
+
+    // ── Search mode toggle ────────────────────────────────────────
     document.getElementById('modeText').addEventListener('click', () => setMode('text'));
     document.getElementById('modeImage').addEventListener('click', () => setMode('image'));
 
@@ -387,6 +539,7 @@
       dropZone.classList.add('has-image');
     }
 
+    // ── Search logic ──────────────────────────────────────────────
     async function runSearch(searchFn) {
       searchBtn.disabled = true;
       statusEl.innerHTML = '<span class="spinner"></span>Searching…';
@@ -445,13 +598,12 @@
     });
 
     function renderCard(hit) {
-      const modality = hit.metadata?.modality || 'text';
+      const modality = hit.modality || 'text';
       const distance = typeof hit.distance === 'number' ? hit.distance.toFixed(4) : '—';
-      const filename = hit.metadata?.filename || hit.id || 'unknown';
+      const filename = (hit.source_path ? hit.source_path.split('/').pop() : null) || hit.id || 'unknown';
 
       if (modality === 'image') {
-        const filepath = hit.metadata?.filepath || '';
-        const imgSrc = filepath ? `/api/image?path=${encodeURIComponent(filepath)}` : '';
+        const imgSrc = hit.source_path ? `/api/image?path=${encodeURIComponent(hit.source_path)}` : '';
         return `
           <div class="card" data-record-id="${escapeHtml(hit.id)}" data-filename="${escapeHtml(filename)}" data-src="${escapeHtml(imgSrc)}" onclick="openLightbox(this)">
             ${imgSrc
@@ -491,11 +643,22 @@
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // ── Lightbox ──────────────────────────────────────────────────
     function openLightbox(cardEl) {
       activeRecordId = cardEl.dataset.recordId;
       document.getElementById('lightboxImg').src = cardEl.dataset.src;
       document.getElementById('lightboxImg').alt = cardEl.dataset.filename;
       document.getElementById('lightboxName').textContent = cardEl.dataset.filename;
+      document.getElementById('lightboxOverlay').classList.remove('hidden');
+    }
+
+    function openLightboxFromGraph(node) {
+      activeRecordId = node.id;
+      const imgSrc = node.source_path ? `/api/image?path=${encodeURIComponent(node.source_path)}` : '';
+      const nodeName = (node.source_path ? node.source_path.split('/').pop() : null) || node.id;
+      document.getElementById('lightboxImg').src = imgSrc;
+      document.getElementById('lightboxImg').alt = nodeName;
+      document.getElementById('lightboxName').textContent = nodeName;
       document.getElementById('lightboxOverlay').classList.remove('hidden');
     }
 
@@ -531,6 +694,7 @@
         const data = await res.json();
         const hits = data.hits || [];
         closeLightbox();
+        setView('search');
         statusEl.textContent = `Similar to: ${sourceName} — ${hits.length} result${hits.length !== 1 ? 's' : ''}`;
         resultsEl.innerHTML = hits.map(hit => renderCard(hit)).join('');
       } catch (err) {
@@ -541,6 +705,287 @@
         btn.textContent = 'Find Similar';
       }
     });
+
+    // ── Graph view ────────────────────────────────────────────────
+    document.getElementById('loadGraphBtn').addEventListener('click', loadGraph);
+
+    async function loadGraph() {
+      const threshold = parseFloat(document.getElementById('thresholdInput').value) || 0.4;
+      const graphStatusEl = document.getElementById('graphStatus');
+      const loadBtn = document.getElementById('loadGraphBtn');
+
+      loadBtn.disabled = true;
+      graphStatusEl.innerHTML = '<span class="spinner"></span>Loading graph…';
+
+      if (graphSimulation) {
+        cancelAnimationFrame(graphSimulation);
+        graphSimulation = null;
+      }
+
+      const svg = document.getElementById('graphSvg');
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      try {
+        const res = await fetch(`/api/graph?threshold=${threshold}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || res.statusText);
+        }
+        const data = await res.json();
+        const nodes = data.nodes || [];
+        const edges = data.edges || [];
+
+        if (nodes.length === 0) {
+          graphStatusEl.textContent = 'No image records found. Ingest some images first.';
+          return;
+        }
+
+        graphStatusEl.textContent = `${nodes.length} node${nodes.length !== 1 ? 's' : ''} · ${edges.length} edge${edges.length !== 1 ? 's' : ''} (threshold ${threshold})`;
+        renderGraph(svg, nodes, edges, threshold);
+      } catch (err) {
+        graphStatusEl.textContent = `Error: ${err.message}`;
+      } finally {
+        loadBtn.disabled = false;
+      }
+    }
+
+    function renderGraph(svgEl, nodes, edges, threshold) {
+      const width = svgEl.clientWidth || svgEl.getBoundingClientRect().width || 900;
+      const height = svgEl.clientHeight || svgEl.getBoundingClientRect().height || 600;
+      const tooltip = document.getElementById('graphTooltip');
+
+      const ns = 'http://www.w3.org/2000/svg';
+
+      // Defs — arrow marker (optional visual aid)
+      const defs = document.createElementNS(ns, 'defs');
+      svgEl.appendChild(defs);
+
+      // Root group for zoom/pan
+      const root = document.createElementNS(ns, 'g');
+      svgEl.appendChild(root);
+
+      const edgeGroup = document.createElementNS(ns, 'g');
+      root.appendChild(edgeGroup);
+
+      const nodeGroup = document.createElementNS(ns, 'g');
+      root.appendChild(nodeGroup);
+
+      // Build maps for fast lookup
+      const nodeById = Object.fromEntries(nodes.map(n => [n.id, n]));
+
+      // Prepare link objects with source/target references
+      const linkObjs = edges.map(e => ({
+        source: nodes.find(n => n.id === e.source) || { id: e.source, x: 0, y: 0 },
+        target: nodes.find(n => n.id === e.target) || { id: e.target, x: 0, y: 0 },
+        distance: e.distance,
+      }));
+
+      // Create SVG line elements
+      const lineEls = linkObjs.map(link => {
+        const strength = 1 - link.distance / threshold;  // 0 → 1 as distance → 0
+        const opacity = 0.35 + 0.65 * strength;
+        const strokeWidth = 0.8 + 2.2 * strength;
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('stroke', '#7c8fa6');
+        line.setAttribute('stroke-opacity', opacity.toFixed(3));
+        line.setAttribute('stroke-width', strokeWidth.toFixed(2));
+        edgeGroup.appendChild(line);
+        return { el: line, link };
+      });
+
+      // Create SVG circle elements
+      const nodeEls = nodes.map(node => {
+        const circle = document.createElementNS(ns, 'circle');
+        circle.setAttribute('r', '18');
+        circle.setAttribute('fill', '#2a2a2a');
+        circle.setAttribute('stroke', '#555');
+        circle.setAttribute('stroke-width', '1.5');
+        circle.style.cursor = 'pointer';
+        nodeGroup.appendChild(circle);
+
+        circle.addEventListener('mouseover', (e) => {
+          circle.setAttribute('fill', '#3d3d3d');
+          circle.setAttribute('stroke', '#888');
+          tooltip.textContent = (node.source_path ? node.source_path.split('/').pop() : null) || node.id;
+          tooltip.style.opacity = '1';
+        });
+        circle.addEventListener('mousemove', (e) => {
+          tooltip.style.left = (e.clientX + 14) + 'px';
+          tooltip.style.top = (e.clientY - 10) + 'px';
+        });
+        circle.addEventListener('mouseout', () => {
+          circle.setAttribute('fill', '#2a2a2a');
+          circle.setAttribute('stroke', '#555');
+          tooltip.style.opacity = '0';
+        });
+        circle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openLightboxFromGraph(node);
+        });
+
+        return { el: circle, node };
+      });
+
+      // ── Force simulation (vanilla, no D3) ──────────────────────
+      // Initialize positions randomly around centre
+      const cx = width / 2, cy = height / 2;
+      nodes.forEach(n => {
+        n.x = cx + (Math.random() - 0.5) * 200;
+        n.y = cy + (Math.random() - 0.5) * 200;
+        n.vx = 0; n.vy = 0;
+      });
+
+      const REPULSION = 3500;
+      const LINK_STRENGTH = 0.08;
+      const LINK_DIST = 110;
+      const DAMPING = 0.85;
+      const ALPHA_DECAY = 0.004;
+      let alpha = 1.0;
+
+      function tick() {
+        if (alpha < 0.001) return;
+        alpha = Math.max(0, alpha - ALPHA_DECAY);
+
+        // Repulsion between all node pairs
+        for (let i = 0; i < nodes.length; i++) {
+          for (let j = i + 1; j < nodes.length; j++) {
+            const dx = nodes[j].x - nodes[i].x;
+            const dy = nodes[j].y - nodes[i].y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const force = (REPULSION / (dist * dist)) * alpha;
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            nodes[i].vx -= fx; nodes[i].vy -= fy;
+            nodes[j].vx += fx; nodes[j].vy += fy;
+          }
+        }
+
+        // Attraction along edges
+        for (const { source, target } of linkObjs) {
+          const dx = target.x - source.x;
+          const dy = target.y - source.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const displacement = (dist - LINK_DIST) * LINK_STRENGTH * alpha;
+          const fx = (dx / dist) * displacement;
+          const fy = (dy / dist) * displacement;
+          source.vx += fx; source.vy += fy;
+          target.vx -= fx; target.vy -= fy;
+        }
+
+        // Centering force
+        nodes.forEach(n => {
+          n.vx += (cx - n.x) * 0.01 * alpha;
+          n.vy += (cy - n.y) * 0.01 * alpha;
+        });
+
+        // Apply velocity + damping, skip pinned nodes
+        nodes.forEach(n => {
+          if (n.pinned) return;
+          n.vx *= DAMPING;
+          n.vy *= DAMPING;
+          n.x += n.vx;
+          n.y += n.vy;
+        });
+
+        // Update DOM
+        nodeEls.forEach(({ el, node }) => {
+          el.setAttribute('cx', node.x.toFixed(1));
+          el.setAttribute('cy', node.y.toFixed(1));
+        });
+        lineEls.forEach(({ el, link }) => {
+          el.setAttribute('x1', link.source.x.toFixed(1));
+          el.setAttribute('y1', link.source.y.toFixed(1));
+          el.setAttribute('x2', link.target.x.toFixed(1));
+          el.setAttribute('y2', link.target.y.toFixed(1));
+        });
+
+        graphSimulation = requestAnimationFrame(tick);
+      }
+
+      graphSimulation = requestAnimationFrame(tick);
+
+      // ── Drag behaviour ────────────────────────────────────────
+      nodeEls.forEach(({ el, node }) => {
+        let dragging = false;
+        let startX, startY, origX, origY;
+
+        el.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          dragging = true;
+          node.pinned = true;
+          startX = e.clientX;
+          startY = e.clientY;
+          origX = node.x;
+          origY = node.y;
+
+          // Compute transform from root group
+          const transform = root.getAttribute('transform') || '';
+          const scaleMatch = transform.match(/scale\(([\d.eE+-]+)\)/);
+          const translateMatch = transform.match(/translate\(([\d.eE+-]+)[, ]+([\d.eE+-]+)\)/);
+          const scale = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+          const tx = translateMatch ? parseFloat(translateMatch[1]) : 0;
+          const ty = translateMatch ? parseFloat(translateMatch[2]) : 0;
+
+          const onMove = (me) => {
+            if (!dragging) return;
+            node.x = origX + (me.clientX - startX) / scale;
+            node.y = origY + (me.clientY - startY) / scale;
+            node.vx = 0; node.vy = 0;
+            cancelAnimationFrame(graphSimulation);
+            alpha = Math.max(alpha, 0.3);
+            graphSimulation = requestAnimationFrame(tick);
+          };
+          const onUp = () => {
+            dragging = false;
+            node.pinned = false;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        });
+      });
+
+      // ── Zoom / pan ────────────────────────────────────────────
+      let panX = 0, panY = 0, zoomScale = 1;
+      let isPanning = false, panStartX, panStartY, panOrigX, panOrigY;
+
+      function applyTransform() {
+        root.setAttribute('transform', `translate(${panX},${panY}) scale(${zoomScale})`);
+      }
+
+      svgEl.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const rect = svgEl.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const delta = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+        const newScale = Math.min(8, Math.max(0.1, zoomScale * delta));
+        panX = mx - (mx - panX) * (newScale / zoomScale);
+        panY = my - (my - panY) * (newScale / zoomScale);
+        zoomScale = newScale;
+        applyTransform();
+      }, { passive: false });
+
+      svgEl.addEventListener('mousedown', (e) => {
+        if (e.target !== svgEl && e.target !== root && e.target !== edgeGroup) return;
+        isPanning = true;
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        panOrigX = panX;
+        panOrigY = panY;
+        svgEl.style.cursor = 'grabbing';
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!isPanning) return;
+        panX = panOrigX + (e.clientX - panStartX);
+        panY = panOrigY + (e.clientY - panStartY);
+        applyTransform();
+      });
+      window.addEventListener('mouseup', () => {
+        if (isPanning) { isPanning = false; svgEl.style.cursor = ''; }
+      });
+    }
   </script>
 </body>
 </html>

@@ -105,6 +105,28 @@ async def search_by_image(
     return response.json()
 
 
+@app.get("/api/graph")
+async def graph(threshold: float = Query(default=0.4, ge=0.0, le=2.0)) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        try:
+            response = await client.get(
+                f"{SENSI_HTTP_URL}/graph",
+                params={"threshold": threshold},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=exc.response.status_code,
+                detail=exc.response.text,
+            )
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not reach search service: {exc}",
+            )
+    return response.json()
+
+
 @app.get("/api/image")
 async def serve_image(path: str = Query(...)) -> FileResponse:
     image_path = Path(path)

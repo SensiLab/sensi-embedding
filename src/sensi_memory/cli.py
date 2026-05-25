@@ -14,15 +14,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     ingest_text = subparsers.add_parser("ingest-text")
     ingest_text.add_argument("--text", required=True)
+    ingest_text.add_argument("--sender", required=True)
+    ingest_text.add_argument("--tags", nargs="+", required=True)
     ingest_text.add_argument("--no-chunk", action="store_true")
-    ingest_text.add_argument("--tags", nargs="*", default=[])
     ingest_text.add_argument("--metadata", default="{}")
     ingest_text.add_argument("--document-id")
 
     ingest_image = subparsers.add_parser("ingest-image")
     ingest_image.add_argument("--image", required=True)
+    ingest_image.add_argument("--sender", required=True)
+    ingest_image.add_argument("--tags", nargs="+", required=True)
     ingest_image.add_argument("--text")
-    ingest_image.add_argument("--tags", nargs="*", default=[])
+    ingest_image.add_argument("--source-path")
     ingest_image.add_argument("--metadata", default="{}")
     ingest_image.add_argument("--document-id")
 
@@ -44,8 +47,9 @@ def main() -> None:
     if args.command == "ingest-text":
         records = service.ingest_text(
             args.text,
-            metadata=_parse_json_dict(args.metadata),
+            sender=args.sender,
             tags=args.tags,
+            metadata=_parse_json_dict(args.metadata),
             document_id=args.document_id,
             chunk=not args.no_chunk,
         )
@@ -56,8 +60,10 @@ def main() -> None:
         record = service.ingest_image(
             args.image,
             text=args.text,
-            metadata=_parse_json_dict(args.metadata),
+            sender=args.sender,
             tags=args.tags,
+            source_path=args.source_path,
+            metadata=_parse_json_dict(args.metadata),
             document_id=args.document_id,
         )
         print(json.dumps(record.model_dump(), indent=2))

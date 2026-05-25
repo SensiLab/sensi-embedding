@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from sensi_memory.config import Settings
-from sensi_memory.models import ImageIngestRequest, IngestMetadata, TextIngestRequest
+from sensi_memory.models import ImageIngestRequest, TextIngestRequest
 from sensi_memory.normalization import chunk_text, normalize_image_request, normalize_text_request
 
 
@@ -17,7 +17,9 @@ def test_normalize_text_request_adds_chunk_metadata() -> None:
     settings = Settings(gemini_api_key="test-key", max_text_chunk_chars=5)
     request = TextIngestRequest(
         text="alpha\nbeta",
-        metadata=IngestMetadata(tags=["note"], attributes={"user_id": "u1"}),
+        sender="test-sender",
+        tags=["note"],
+        metadata={"user_id": "u1"},
         document_id="doc-1",
     )
 
@@ -25,7 +27,8 @@ def test_normalize_text_request_adds_chunk_metadata() -> None:
 
     assert [chunk.record_id for chunk in chunks] == ["doc-1:chunk:0", "doc-1:chunk:1"]
     assert chunks[0].metadata["chunk_count"] == 2
-    assert chunks[0].metadata["tags"] == ["note"]
+    assert chunks[0].metadata["tags"] == "note"
+    assert chunks[0].metadata["sender"] == "test-sender"
     assert chunks[0].metadata["user_id"] == "u1"
 
 
@@ -36,6 +39,9 @@ def test_normalize_image_request_reads_png(tmp_path: Path) -> None:
     request = ImageIngestRequest(
         image_path=str(image_path),
         text="diagram",
+        sender="test-sender",
+        tags=["chart"],
+        source_path="/original/images/sample.png",
         document_id="img-1",
     )
 
@@ -44,14 +50,34 @@ def test_normalize_image_request_reads_png(tmp_path: Path) -> None:
     assert normalized.record_id == "img-1"
     assert normalized.mime_type == "image/png"
     assert normalized.document == "diagram"
-    assert normalized.metadata["source_path"] == str(image_path.resolve())
+    assert normalized.metadata["source_path"] == "/original/images/sample.png"
+    assert "filename" not in normalized.metadata
+    assert normalized.metadata["sender"] == "test-sender"
+    assert normalized.metadata["tags"] == "chart"
+
+
+def test_normalize_image_request_no_source_path(tmp_path: Path) -> None:
+    image_path = tmp_path / "sample.png"
+    image_path.write_bytes(b"fake-png")
+
+    request = ImageIngestRequest(
+        image_path=str(image_path),
+        sender="test-sender",
+        tags=[],
+        document_id="img-2",
+    )
+
+    normalized = normalize_image_request(request)
+
+    assert "source_path" not in normalized.metadata
+    assert "filename" not in normalized.metadata
 
 
 def test_normalize_image_request_rejects_unsupported_type(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.gif"
     image_path.write_bytes(b"GIF89a")
 
-    request = ImageIngestRequest(image_path=str(image_path))
+    request = ImageIngestRequest(image_path=str(image_path), sender="test", tags=[])
 
     with pytest.raises(ValueError):
         normalize_image_request(request)

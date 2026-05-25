@@ -8,15 +8,9 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 
-
 class Modality(str, Enum):
     TEXT = "text"
     IMAGE = "image"
-
-
-class IngestMetadata(BaseModel):
-    tags: list[str] = Field(default_factory=list)
-    attributes: dict[str, Any] = Field(default_factory=dict)
 
 
 def generate_document_id() -> str:
@@ -26,7 +20,9 @@ def generate_document_id() -> str:
 
 class TextIngestRequest(BaseModel):
     text: str
-    metadata: IngestMetadata = Field(default_factory=IngestMetadata)
+    sender: str
+    tags: list[str]
+    metadata: dict[str, Any] = Field(default_factory=dict)
     document_id: str = Field(default_factory=generate_document_id)
     chunk: bool = True
 
@@ -34,20 +30,32 @@ class TextIngestRequest(BaseModel):
 class ImageIngestRequest(BaseModel):
     image_path: str
     text: str | None = None
-    metadata: IngestMetadata = Field(default_factory=IngestMetadata)
+    sender: str
+    tags: list[str]
+    source_path: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     document_id: str = Field(default_factory=generate_document_id)
 
 
 class StoredRecord(BaseModel):
     id: str
     document_id: str
+    sender: str
     modality: Modality
+    tags: list[str]
+    date: str
+    source_path: str | None = None
     document: str
     metadata: dict[str, Any]
 
 
 class SearchHit(BaseModel):
     id: str
+    sender: str
+    modality: Modality
+    tags: list[str]
+    date: str
+    source_path: str | None = None
     document: str
     metadata: dict[str, Any]
     distance: float
@@ -60,20 +68,21 @@ class SearchResponse(BaseModel):
 def build_base_metadata(
     *,
     document_id: str,
+    sender: str,
     modality: Modality,
     mime_type: str | None,
-    metadata: IngestMetadata,
+    tags: list[str],
+    attributes: dict[str, Any],
 ) -> dict[str, Any]:
-    """Build the standard metadata dict shared by all stored records, merging tags and custom attributes."""
-    base_metadata: dict[str, Any] = {
+    """Build the standard metadata dict shared by all stored records, merging custom attributes."""
+    base: dict[str, Any] = {
         "document_id": document_id,
+        "sender": sender,
         "modality": modality.value,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "date": datetime.now(timezone.utc).isoformat(),
+        "tags": ",".join(tags),
     }
-    if metadata.tags:
-        base_metadata["tags"] = ",".join(metadata.tags)
     if mime_type:
-        base_metadata["mime_type"] = mime_type
-    if metadata.attributes:
-        base_metadata.update(metadata.attributes)
-    return base_metadata
+        base["mime_type"] = mime_type
+    base.update(attributes)
+    return base

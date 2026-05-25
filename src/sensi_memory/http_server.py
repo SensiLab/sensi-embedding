@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -21,11 +21,28 @@ from sensi_memory.models import SearchResponse, StoredRecord
 from sensi_memory.service import MemoryService
 
 
+class GraphNodeResponse(BaseModel):
+    id: str
+    source_path: str | None
+
+
+class GraphEdgeResponse(BaseModel):
+    source: str
+    target: str
+    distance: float
+
+
+class GraphResponse(BaseModel):
+    nodes: list[GraphNodeResponse]
+    edges: list[GraphEdgeResponse]
+
+
 class TextIngestRequest(BaseModel):
     """Request body for the POST /ingest/text endpoint."""
 
     text: str
-    tags: list[str] | None = Field(default=None)
+    sender: str
+    tags: list[str]
     metadata: dict[str, Any] | None = Field(default=None)
     document_id: str | None = Field(default=None)
     chunk: bool = Field(default=True)
@@ -67,6 +84,7 @@ def ingest_text(body: TextIngestRequest) -> list[StoredRecord]:
     try:
         return _service().ingest_text(
             body.text,
+            sender=body.sender,
             tags=body.tags,
             metadata=body.metadata,
             document_id=body.document_id,
@@ -81,17 +99,21 @@ def ingest_text(body: TextIngestRequest) -> list[StoredRecord]:
 @app.post("/ingest/image", response_model=StoredRecord, status_code=status.HTTP_200_OK)
 async def ingest_image(
     file: UploadFile = File(...),
+    sender: str = Form(...),
+    tags: str = Form(...),
     text: str | None = Form(default=None),
-    tags: str | None = Form(default=None),
+    source_path: str | None = Form(default=None),
     metadata: str | None = Form(default=None),
     document_id: str | None = Form(default=None),
 ) -> StoredRecord:
     """Embed and store an uploaded image, writing it to a tempfile for path-based normalization.
 
+    sender: who or what is ingesting this record.
     tags: comma-separated string (e.g. "photo,nature").
+    source_path: original path or URI of the image as known to the sender.
     metadata: JSON object string (e.g. '{"source": "camera"}').
     """
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
     metadata_dict: dict[str, Any] | None = None
     if metadata:
         try:
@@ -113,7 +135,9 @@ async def ingest_image(
         return _service().ingest_image(
             tmp_path,
             text=text,
+            sender=sender,
             tags=tag_list,
+            source_path=source_path,
             metadata=metadata_dict,
             document_id=document_id,
         )
@@ -190,7 +214,7 @@ def export_csv() -> StreamingResponse:
                 seen.add(k)
                 all_meta_keys.append(k)
 
-    fieldnames = ["id", "document_id", "modality", "document"] + all_meta_keys
+    fieldnames = ["id", "document_id", "sender", "modality", "tags", "date", "document"] + all_meta_keys
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
@@ -199,7 +223,10 @@ def export_csv() -> StreamingResponse:
         writer.writerow({
             "id": r.id,
             "document_id": r.document_id,
+            "sender": r.sender,
             "modality": r.modality,
+            "tags": ",".join(r.tags),
+            "date": r.date,
             "document": r.document,
             **r.metadata,
         })
@@ -209,6 +236,16 @@ def export_csv() -> StreamingResponse:
         iter([buf.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=\"export.csv\""},
+    )
+
+
+@app.get("/graph", response_model=GraphResponse, status_code=status.HTTP_200_OK)
+def graph(threshold: float = Query(default=0.4, ge=0.0, le=2.0)) -> GraphResponse:
+    """Return all image nodes and similarity edges where cosine distance is below threshold."""
+    data = _service().get_graph_data(threshold)
+    return GraphResponse(
+        nodes=[GraphNodeResponse(id=n.id, source_path=n.source_path) for n in data.nodes],
+        edges=[GraphEdgeResponse(source=e.source, target=e.target, distance=e.distance) for e in data.edges],
     )
 
 

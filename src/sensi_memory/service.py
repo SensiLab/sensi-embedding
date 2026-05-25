@@ -1,19 +1,40 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
+
+import numpy as np
 
 from sensi_memory.chroma_store import ChromaMemoryStore
 from sensi_memory.config import Settings
 from sensi_memory.gemini_client import GeminiEmbedder
 from sensi_memory.models import (
     ImageIngestRequest,
-    IngestMetadata,
     SearchResponse,
     StoredRecord,
     TextIngestRequest,
     generate_document_id,
 )
 from sensi_memory.normalization import normalize_image_request, normalize_text_request
+
+
+@dataclass
+class GraphNode:
+    id: str
+    source_path: str | None
+
+
+@dataclass
+class GraphEdge:
+    source: str
+    target: str
+    distance: float
+
+
+@dataclass
+class GraphData:
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
 
 
 class MemoryService:
@@ -42,16 +63,18 @@ class MemoryService:
         self,
         text: str,
         *,
+        sender: str,
+        tags: list[str],
         metadata: dict[str, Any] | None = None,
-        tags: list[str] | None = None,
         document_id: str | None = None,
         chunk: bool = True) -> list[StoredRecord]:
         """Chunk, embed, and store text; returns one StoredRecord per chunk."""
 
-
         request = TextIngestRequest(
             text=text,
-            metadata=IngestMetadata(tags=tags or [], attributes=metadata or {}),
+            sender=sender,
+            tags=tags,
+            metadata=metadata or {},
             document_id=document_id or generate_document_id(),
             chunk=chunk,
         )
@@ -72,15 +95,20 @@ class MemoryService:
         image_path: str,
         *,
         text: str | None = None,
+        sender: str,
+        tags: list[str],
+        source_path: str | None = None,
         metadata: dict[str, Any] | None = None,
-        tags: list[str] | None = None,
         document_id: str | None = None) -> StoredRecord:
         """Embed a PNG or JPEG image (with optional caption) and store it as a single record."""
 
         request = ImageIngestRequest(
             image_path=image_path,
             text=text,
-            metadata=IngestMetadata(tags=tags or [], attributes=metadata or {}),
+            sender=sender,
+            tags=tags,
+            source_path=source_path,
+            metadata=metadata or {},
             document_id=document_id or generate_document_id(),
         )
 
@@ -107,7 +135,7 @@ class MemoryService:
         top_k: int | None = None,
         metadata_filter: dict[str, Any] | None = None) -> SearchResponse:
         """Embed the query and retrieve the top-k most similar records from the store."""
-        
+
         if not text.strip():
             raise ValueError("Search text cannot be empty.")
         query_embedding = self._embedder.embed_query_text(text.strip())
@@ -155,3 +183,36 @@ class MemoryService:
     def export_all(self) -> list[StoredRecord]:
         """Return all stored records without embeddings."""
         return self._store.get_all_records()
+
+    def get_graph_data(self, threshold: float = 0.4) -> GraphData:
+        """Return image nodes and similarity edges for all stored image records.
+
+        Edges connect pairs whose cosine distance is below threshold.
+        """
+        all_records, all_embeddings = self._store.get_all_with_embeddings()
+
+        image_records = [r for r, e in zip(all_records, all_embeddings) if r.modality == "image"]
+        image_embeddings = [e for r, e in zip(all_records, all_embeddings) if r.modality == "image"]
+
+        nodes = [
+            GraphNode(id=r.id, source_path=r.source_path)
+            for r in image_records
+        ]
+
+        edges: list[GraphEdge] = []
+        if len(image_embeddings) >= 2:
+            matrix = np.array(image_embeddings, dtype=np.float32)
+            norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+            normed = matrix / np.maximum(norms, 1e-10)
+            distances = 1.0 - (normed @ normed.T)
+            i_idx, j_idx = np.where(np.triu(distances < threshold, k=1))
+            edges = [
+                GraphEdge(
+                    source=image_records[int(i)].id,
+                    target=image_records[int(j)].id,
+                    distance=float(distances[int(i), int(j)]),
+                )
+                for i, j in zip(i_idx, j_idx)
+            ]
+
+        return GraphData(nodes=nodes, edges=edges)

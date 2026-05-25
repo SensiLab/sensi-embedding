@@ -12,35 +12,47 @@ service = MemoryService.from_settings(Settings.from_env())
 
 
 @mcp.tool()
-def ingest_text(text: str, tags: str = "") -> str:
+def ingest_text(text: str, sender: str, tags: str) -> str:
     """Store text in long-term memory.
 
     Args:
         text: The text to store.
-        tags: Comma-separated tags to associate with the record (optional).
+        sender: Who or what is ingesting this record.
+        tags: Comma-separated tags to associate with the record.
 
     Returns:
         A confirmation message with the record ID(s) stored.
     """
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    records = service.ingest_text(text, tags=tag_list)
+    records = service.ingest_text(text, sender=sender, tags=tag_list)
     ids = ", ".join(r.id for r in records)
     return f"Stored {len(records)} record(s) with IDs: {ids}"
 
 
 @mcp.tool()
-def ingest_image(image_path: str, description: str = "") -> str:
+def ingest_image(image_path: str, sender: str, tags: str, source_path: str = "", description: str = "") -> str:
     """Store an image in long-term memory.
 
     Args:
-        image_path: Path to a PNG or JPEG image file.
+        image_path: Path to a PNG or JPEG image file to read and embed.
+        sender: Who or what is ingesting this record.
+        tags: Comma-separated tags to associate with the record.
+        source_path: Original path or URI of the image as known to the sender (optional).
         description: Optional text description of the image.
 
     Returns:
         A confirmation message with the record ID.
     """
-    record = service.ingest_image(image_path, text=description or None)
-    return f"Stored image record: {record.id}\nSource: {record.metadata.get('source_path', image_path)}\nModality: {record.metadata.get('modality')}"
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    record = service.ingest_image(
+        image_path,
+        text=description or None,
+        sender=sender,
+        tags=tag_list,
+        source_path=source_path or None,
+    )
+    source = record.metadata.get("source_path", image_path)
+    return f"Stored image record: {record.id}\nSource: {source}\nModality: {record.modality}"
 
 
 @mcp.tool()
@@ -56,19 +68,17 @@ def search_memory(query: str, top_k: int = 5) -> str:
     """
     if not query.strip():
         return "Search query cannot be empty."
-    
+
     response = service.search_text(query, top_k=top_k)
     if not response.hits:
         return f"No relevant memories found for query: '{query}'"
-    
+
     lines = [f"Found {len(response.hits)} match(es) for: '{query}'\n"]
     for i, hit in enumerate(response.hits, 1):
-        modality = hit.metadata.get("modality", "unknown")
         mime = hit.metadata.get("mime_type", "")
         mime_str = f" ({mime})" if mime else ""
-        distance = hit.distance
-        lines.append(f"[{i}] [{modality}{mime_str}] {hit.document} (distance: {distance:.3f})")
-    
+        lines.append(f"[{i}] [{hit.modality}{mime_str}] {hit.document} (distance: {hit.distance:.3f})")
+
     return "\n".join(lines)
 
 
