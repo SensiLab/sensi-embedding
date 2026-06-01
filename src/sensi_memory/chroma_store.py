@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import chromadb
@@ -130,6 +131,28 @@ class ChromaMemoryStore:
     def count(self) -> int:
         """Return the total number of records in the collection."""
         return self._collection.count()
+
+    def get_records_by_sender_since(self, sender: str, days: int) -> list[StoredRecord]:
+        """Return all records for the given sender created within the last `days` days."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        result = self._collection.get(
+            where={"sender": {"$eq": sender}},
+            include=["documents", "metadatas"],
+        )
+        records = []
+        for record_id, document, metadata in zip(
+            result["ids"], result["documents"], result["metadatas"], strict=False
+        ):
+            raw_date = (metadata or {}).get("date", "")
+            try:
+                record_date = datetime.fromisoformat(raw_date)
+                if record_date.tzinfo is None:
+                    record_date = record_date.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                continue
+            if record_date >= cutoff:
+                records.append(_record_from_parts(record_id, document, metadata or {}))
+        return records
 
     def get_all_senders(self) -> list[str]:
         """Return a sorted, deduplicated list of every sender value in the collection."""

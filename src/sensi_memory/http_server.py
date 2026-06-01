@@ -91,6 +91,15 @@ def senders() -> dict[str, list[str]]:
     return {"senders": _service().get_all_senders()}
 
 
+@app.get("/records", response_model=list[StoredRecord], status_code=status.HTTP_200_OK)
+def records_by_sender(
+    sender: str = Query(..., description="Sender name to filter by"),
+    days: int = Query(default=7, ge=1, description="Number of past days to include"),
+) -> list[StoredRecord]:
+    """Return all records for a given sender created within the last N days."""
+    return _service().get_records_by_sender_since(sender, days)
+
+
 @app.post("/ingest/text", response_model=list[StoredRecord], status_code=status.HTTP_200_OK)
 def ingest_text(body: TextIngestRequest) -> list[StoredRecord]:
     """Embed and store text in the vector database, optionally chunking large inputs."""

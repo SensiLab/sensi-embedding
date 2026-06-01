@@ -51,6 +51,43 @@ curl http://localhost:8000/senders
 
 ---
 
+### `GET /records`
+
+Return all records for a given sender created within the last N days. Results are ordered by insertion order.
+
+**Query parameters**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `sender` | string | yes | Sender name to filter by |
+| `days` | integer | no | Number of past days to include (default: 7, minimum: 1) |
+
+**Example request**
+```bash
+curl "http://localhost:8000/records?sender=ingest-bot&days=7"
+```
+
+**Response `200 OK`** — array of `StoredRecord` objects (may be empty if no matching records exist)
+
+```json
+[
+  {
+    "id": "abc123:chunk:0",
+    "document_id": "abc123",
+    "sender": "ingest-bot",
+    "modality": "text",
+    "tags": ["geography"],
+    "date": "2026-05-28T12:00:00+00:00",
+    "source_path": null,
+    "object_path": null,
+    "document": "Paris is the capital of France.",
+    "metadata": { "source": "wiki" }
+  }
+]
+```
+
+---
+
 ### `POST /ingest/text`
 
 Embed and store a text string. Large inputs are split into paragraph-aligned chunks (≤ 2000 characters each by default); each chunk becomes its own record but all share the same `document_id`.

@@ -192,6 +192,10 @@ class MemoryService:
         """Return the total number of records in the store."""
         return self._store.count()
 
+    def get_records_by_sender_since(self, sender: str, days: int) -> list[StoredRecord]:
+        """Return all records for the given sender created within the last `days` days."""
+        return self._store.get_records_by_sender_since(sender, days)
+
     def get_all_senders(self) -> list[str]:
         """Return a sorted, deduplicated list of every sender in the store."""
         return self._store.get_all_senders()
