@@ -51,12 +51,13 @@ def test_normalize_image_request_reads_png(tmp_path: Path) -> None:
     assert normalized.mime_type == "image/png"
     assert normalized.document == "diagram"
     assert normalized.metadata["source_path"] == "/original/images/sample.png"
+    assert normalized.metadata["object_path"] == ""
     assert "filename" not in normalized.metadata
     assert normalized.metadata["sender"] == "test-sender"
     assert normalized.metadata["tags"] == "chart"
 
 
-def test_normalize_image_request_no_source_path(tmp_path: Path) -> None:
+def test_normalize_image_request_no_object_path(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.png"
     image_path.write_bytes(b"fake-png")
 
@@ -64,20 +65,41 @@ def test_normalize_image_request_no_source_path(tmp_path: Path) -> None:
         image_path=str(image_path),
         sender="test-sender",
         tags=[],
+        source_path="/original/images/sample.png",
         document_id="img-2",
     )
 
     normalized = normalize_image_request(request)
 
-    assert "source_path" not in normalized.metadata
+    assert normalized.metadata["source_path"] == "/original/images/sample.png"
+    assert normalized.metadata["object_path"] == ""
     assert "filename" not in normalized.metadata
+
+
+def test_normalize_image_request_with_object_path(tmp_path: Path) -> None:
+    image_path = tmp_path / "sample.png"
+    image_path.write_bytes(b"fake-png")
+
+    request = ImageIngestRequest(
+        image_path=str(image_path),
+        sender="test-sender",
+        tags=[],
+        source_path="/original/images/sample.png",
+        object_path="/objects/sample_crop.png",
+        document_id="img-3",
+    )
+
+    normalized = normalize_image_request(request)
+
+    assert normalized.metadata["source_path"] == "/original/images/sample.png"
+    assert normalized.metadata["object_path"] == "/objects/sample_crop.png"
 
 
 def test_normalize_image_request_rejects_unsupported_type(tmp_path: Path) -> None:
     image_path = tmp_path / "sample.gif"
     image_path.write_bytes(b"GIF89a")
 
-    request = ImageIngestRequest(image_path=str(image_path), sender="test", tags=[])
+    request = ImageIngestRequest(image_path=str(image_path), sender="test", tags=[], source_path="/original/sample.gif")
 
     with pytest.raises(ValueError):
         normalize_image_request(request)

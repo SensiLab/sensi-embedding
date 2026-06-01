@@ -127,7 +127,7 @@ def normalize_image_request(request: ImageIngestRequest) -> NormalizedImageInput
         )
 
     image_bytes = image_path.read_bytes()
-    source_name = Path(request.source_path).name if request.source_path else None
+    source_name = Path(request.source_path).name
     document = request.text.strip() if request.text else (source_name or image_path.name)
     metadata = build_base_metadata(
         document_id=request.document_id,
@@ -137,8 +137,8 @@ def normalize_image_request(request: ImageIngestRequest) -> NormalizedImageInput
         tags=request.tags,
         attributes=request.metadata,
     )
-    if request.source_path:
-        metadata["source_path"] = request.source_path
+    metadata["source_path"] = request.source_path
+    metadata["object_path"] = request.object_path or ""
 
     return NormalizedImageInput(
         record_id=request.document_id,

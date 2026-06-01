@@ -24,6 +24,7 @@ from sensi_memory.service import MemoryService
 class GraphNodeResponse(BaseModel):
     id: str
     source_path: str | None
+    object_path: str | None
 
 
 class GraphEdgeResponse(BaseModel):
@@ -78,6 +79,12 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/count", status_code=status.HTTP_200_OK)
+def count() -> dict[str, int]:
+    """Return the total number of records stored in the database."""
+    return {"count": _service().count()}
+
+
 @app.post("/ingest/text", response_model=list[StoredRecord], status_code=status.HTTP_200_OK)
 def ingest_text(body: TextIngestRequest) -> list[StoredRecord]:
     """Embed and store text in the vector database, optionally chunking large inputs."""
@@ -101,8 +108,9 @@ async def ingest_image(
     file: UploadFile = File(...),
     sender: str = Form(...),
     tags: str = Form(...),
+    source_path: str = Form(...),
     text: str | None = Form(default=None),
-    source_path: str | None = Form(default=None),
+    object_path: str | None = Form(default=None),
     metadata: str | None = Form(default=None),
     document_id: str | None = Form(default=None),
 ) -> StoredRecord:
@@ -110,7 +118,8 @@ async def ingest_image(
 
     sender: who or what is ingesting this record.
     tags: comma-separated string (e.g. "photo,nature").
-    source_path: original path or URI of the image as known to the sender.
+    source_path: original path or URI of the source screenshot/image as known to the sender (required).
+    object_path: path to an artifact extracted from the source image, if stored alongside it (optional).
     metadata: JSON object string (e.g. '{"source": "camera"}').
     """
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
@@ -138,6 +147,7 @@ async def ingest_image(
             sender=sender,
             tags=tag_list,
             source_path=source_path,
+            object_path=object_path,
             metadata=metadata_dict,
             document_id=document_id,
         )
@@ -169,6 +179,7 @@ class SimilarRequest(BaseModel):
 
     record_id: str
     top_k: int | None = Field(default=None, ge=1)
+    metadata_filter: dict[str, Any] | None = Field(default=None)
 
 
 ALLOWED_IMAGE_SEARCH_TYPES = {"image/jpeg", "image/png"}
@@ -178,6 +189,7 @@ ALLOWED_IMAGE_SEARCH_TYPES = {"image/jpeg", "image/png"}
 async def search_image(
     file: UploadFile = File(...),
     top_k: int = Form(default=5, ge=1),
+    metadata_filter: str | None = Form(default=None),
 ) -> SearchResponse:
     """Embed an uploaded image and search for similar records without storing the image."""
     if file.content_type not in ALLOWED_IMAGE_SEARCH_TYPES:
@@ -185,9 +197,17 @@ async def search_image(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Only JPEG and PNG images are supported",
         )
+    filter_dict: dict[str, Any] | None = None
+    if metadata_filter:
+        try:
+            filter_dict = json.loads(metadata_filter)
+            if not isinstance(filter_dict, dict):
+                raise ValueError("metadata_filter must be a JSON object")
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     image_bytes = await file.read()
     try:
-        return _service().search_image(image_bytes, file.content_type, top_k=top_k)
+        return _service().search_image(image_bytes, file.content_type, top_k=top_k, metadata_filter=filter_dict)
     except EmbeddingError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
@@ -196,7 +216,11 @@ async def search_image(
 def similar(body: SimilarRequest) -> SearchResponse:
     """Find records with embeddings nearest to the stored embedding for the given record ID."""
     try:
-        return _service().search_similar_by_id(body.record_id, top_k=body.top_k)
+        return _service().search_similar_by_id(
+            body.record_id,
+            top_k=body.top_k,
+            metadata_filter=body.metadata_filter,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -214,7 +238,7 @@ def export_csv() -> StreamingResponse:
                 seen.add(k)
                 all_meta_keys.append(k)
 
-    fieldnames = ["id", "document_id", "sender", "modality", "tags", "date", "document"] + all_meta_keys
+    fieldnames = ["id", "document_id", "sender", "modality", "tags", "date", "source_path", "object_path", "document"] + all_meta_keys
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
@@ -227,6 +251,8 @@ def export_csv() -> StreamingResponse:
             "modality": r.modality,
             "tags": ",".join(r.tags),
             "date": r.date,
+            "source_path": r.source_path or "",
+            "object_path": r.object_path or "",
             "document": r.document,
             **r.metadata,
         })
@@ -244,7 +270,7 @@ def graph(threshold: float = Query(default=0.4, ge=0.0, le=2.0)) -> GraphRespons
     """Return all image nodes and similarity edges where cosine distance is below threshold."""
     data = _service().get_graph_data(threshold)
     return GraphResponse(
-        nodes=[GraphNodeResponse(id=n.id, source_path=n.source_path) for n in data.nodes],
+        nodes=[GraphNodeResponse(id=n.id, source_path=n.source_path, object_path=n.object_path) for n in data.nodes],
         edges=[GraphEdgeResponse(source=e.source, target=e.target, distance=e.distance) for e in data.edges],
     )
 

@@ -18,11 +18,13 @@ ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 class SearchRequest(BaseModel):
     text: str
     top_k: int = Field(default=5, ge=1)
+    metadata_filter: dict[str, Any] | None = Field(default=None)
 
 
 class SimilarRequest(BaseModel):
     record_id: str
     top_k: int = Field(default=5, ge=1)
+    metadata_filter: dict[str, Any] | None = Field(default=None)
 
 
 app = FastAPI(title="Sensi Visualisation", version="0.1.0")
@@ -40,7 +42,7 @@ async def search(body: SearchRequest) -> dict[str, Any]:
         try:
             response = await client.post(
                 f"{SENSI_HTTP_URL}/search",
-                json={"text": formatted, "top_k": body.top_k},
+                json={"text": formatted, "top_k": body.top_k, "metadata_filter": body.metadata_filter},
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -62,7 +64,7 @@ async def similar(body: SimilarRequest) -> dict[str, Any]:
         try:
             response = await client.post(
                 f"{SENSI_HTTP_URL}/similar",
-                json={"record_id": body.record_id, "top_k": body.top_k},
+                json={"record_id": body.record_id, "top_k": body.top_k, "metadata_filter": body.metadata_filter},
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -82,14 +84,18 @@ async def similar(body: SimilarRequest) -> dict[str, Any]:
 async def search_by_image(
     file: UploadFile = File(...),
     top_k: int = Form(default=5, ge=1),
+    metadata_filter: str | None = Form(default=None),
 ) -> dict[str, Any]:
     image_bytes = await file.read()
+    form_data: dict[str, Any] = {"top_k": top_k}
+    if metadata_filter is not None:
+        form_data["metadata_filter"] = metadata_filter
     async with httpx.AsyncClient(timeout=30.0) as client:
         try:
             response = await client.post(
                 f"{SENSI_HTTP_URL}/search/image",
                 files={"file": (file.filename, image_bytes, file.content_type)},
-                data={"top_k": top_k},
+                data=form_data,
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:

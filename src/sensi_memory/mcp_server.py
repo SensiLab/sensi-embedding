@@ -30,14 +30,15 @@ def ingest_text(text: str, sender: str, tags: str) -> str:
 
 
 @mcp.tool()
-def ingest_image(image_path: str, sender: str, tags: str, source_path: str = "", description: str = "") -> str:
+def ingest_image(image_path: str, sender: str, tags: str, source_path: str, object_path: str = "", description: str = "") -> str:
     """Store an image in long-term memory.
 
     Args:
         image_path: Path to a PNG or JPEG image file to read and embed.
         sender: Who or what is ingesting this record.
         tags: Comma-separated tags to associate with the record.
-        source_path: Original path or URI of the image as known to the sender (optional).
+        source_path: Original path or URI of the source screenshot/image as known to the sender (required).
+        object_path: Path to an artifact extracted from the source image, if stored alongside it (optional).
         description: Optional text description of the image.
 
     Returns:
@@ -49,10 +50,10 @@ def ingest_image(image_path: str, sender: str, tags: str, source_path: str = "",
         text=description or None,
         sender=sender,
         tags=tag_list,
-        source_path=source_path or None,
+        source_path=source_path,
+        object_path=object_path or None,
     )
-    source = record.metadata.get("source_path", image_path)
-    return f"Stored image record: {record.id}\nSource: {source}\nModality: {record.modality}"
+    return f"Stored image record: {record.id}\nSource: {record.source_path}\nModality: {record.modality}"
 
 
 @mcp.tool()

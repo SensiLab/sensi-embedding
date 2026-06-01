@@ -40,7 +40,8 @@ These fields are present on every record and exposed as typed attributes on `Sto
 | `modality` | `"text"` \| `"image"` | code | Determined by ingest path; never user-supplied |
 | `tags` | `list[str]` | **user (required)** | Arbitrary labels for the record. Pass `[]` for no tags. |
 | `date` | `str` (ISO 8601 UTC) | code | Timestamp when the record was created |
-| `source_path` | `str \| null` | **user (optional)** | Original path or URI of the image as provided by the sender. Only meaningful for image records; `null` when not supplied. |
+| `source_path` | `str \| null` | **user (required for image)** | Original path or URI of the source screenshot/image provided by the sender. Required for image ingest; `null` for text records. |
+| `object_path` | `str \| null` | user (optional) | Path to an artifact extracted from the original source image (e.g. a crop or derived file) and stored alongside it. Optional for image records; `null` when not supplied. |
 | `document` | `str` | code | The text content (chunk text, image caption, or image filename fallback) |
 
 ---
@@ -108,6 +109,7 @@ A multi-chunk text document with `document_id = "abc123"` and 3 chunks produces 
   "tags": ["diagram", "architecture"],
   "date": "2025-05-25T11:00:00+00:00",
   "source_path": "/data/images/arch.png",
+  "object_path": "/data/objects/arch_crop.png",
   "document": "system architecture diagram",
   "metadata": {
     "mime_type": "image/png"

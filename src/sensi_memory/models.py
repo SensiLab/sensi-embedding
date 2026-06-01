@@ -32,7 +32,8 @@ class ImageIngestRequest(BaseModel):
     text: str | None = None
     sender: str
     tags: list[str]
-    source_path: str | None = None
+    source_path: str
+    object_path: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     document_id: str = Field(default_factory=generate_document_id)
 
@@ -45,6 +46,7 @@ class StoredRecord(BaseModel):
     tags: list[str]
     date: str
     source_path: str | None = None
+    object_path: str | None = None
     document: str
     metadata: dict[str, Any]
 
@@ -56,6 +58,7 @@ class SearchHit(BaseModel):
     tags: list[str]
     date: str
     source_path: str | None = None
+    object_path: str | None = None
     document: str
     metadata: dict[str, Any]
     distance: float

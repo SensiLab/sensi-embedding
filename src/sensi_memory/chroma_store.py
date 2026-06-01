@@ -7,7 +7,7 @@ import chromadb
 from sensi_memory.config import Settings
 from sensi_memory.models import SearchHit, SearchResponse, StoredRecord
 
-_RESERVED_KEYS = {"document_id", "sender", "modality", "tags", "date", "source_path", "filename"}
+_RESERVED_KEYS = {"document_id", "sender", "modality", "tags", "date", "source_path", "object_path", "filename"}
 
 
 def _split_tags(raw: str) -> list[str]:
@@ -27,6 +27,7 @@ def _record_from_parts(record_id: str, document: str, metadata: dict[str, Any]) 
         tags=_split_tags(str(metadata.get("tags", ""))),
         date=str(metadata.get("date", "")),
         source_path=metadata.get("source_path") or None,
+        object_path=metadata.get("object_path") or None,
         document=document,
         metadata=_strip_reserved(metadata),
     )
@@ -40,6 +41,7 @@ def _hit_from_parts(record_id: str, document: str, metadata: dict[str, Any], dis
         tags=_split_tags(str(metadata.get("tags", ""))),
         date=str(metadata.get("date", "")),
         source_path=metadata.get("source_path") or None,
+        object_path=metadata.get("object_path") or None,
         document=document,
         metadata=_strip_reserved(metadata),
         distance=distance,
@@ -124,6 +126,10 @@ class ChromaMemoryStore:
                 result["ids"], result["documents"], result["metadatas"], strict=False
             )
         ]
+
+    def count(self) -> int:
+        """Return the total number of records in the collection."""
+        return self._collection.count()
 
     def get_all_with_embeddings(self) -> tuple[list[StoredRecord], list[list[float]]]:
         """Return every record in the collection together with their raw embedding vectors."""

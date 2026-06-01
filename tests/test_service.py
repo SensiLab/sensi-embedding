@@ -94,6 +94,7 @@ def test_ingest_image_embeds_and_stores(tmp_path: Path) -> None:
         text="a diagram",
         sender="test-sender",
         tags=["diagram"],
+        source_path="/original/images/sample.png",
         document_id="img-1",
     )
 

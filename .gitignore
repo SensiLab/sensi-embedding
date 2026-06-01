@@ -20,3 +20,5 @@ src/.DS_Store
 *.csv
 
 simple_embedding_test.py
+
+data/

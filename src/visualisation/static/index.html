@@ -393,6 +393,42 @@
       word-break: break-all;
       z-index: 500;
     }
+
+    .results-section { max-width: 1200px; margin: 0 auto 2rem; }
+
+    .results-section-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 0.75rem;
+      padding-left: 0.25rem;
+    }
+
+    .btn-toggle-text {
+      margin-top: 0.4rem;
+      padding: 0.25rem 0.5rem;
+      background: none;
+      border: 1px solid #444;
+      border-radius: 5px;
+      color: #888;
+      font-size: 0.75rem;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .btn-toggle-text:hover { color: #ccc; border-color: #666; }
+
+    .card-text-body {
+      font-size: 0.8rem;
+      color: #999;
+      line-height: 1.4;
+      margin-top: 0.4rem;
+      display: none;
+    }
+    .card-text-body.visible { display: block; }
   </style>
 </head>
 <body>
@@ -429,7 +465,18 @@
     </form>
 
     <div id="status"></div>
-    <div class="results-grid" id="results"></div>
+    <div id="imageSection" style="display:none">
+      <div class="results-section">
+        <div class="results-section-title" id="imageSectionTitle">Top Images</div>
+        <div class="results-grid" id="imageResults"></div>
+      </div>
+    </div>
+    <div id="textSection" style="display:none">
+      <div class="results-section">
+        <div class="results-section-title" id="textSectionTitle">Top Text</div>
+        <div class="results-grid" id="textResults"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Graph view -->
@@ -477,7 +524,12 @@
     const topkInput = document.getElementById('topkInput');
     const searchBtn = document.getElementById('searchBtn');
     const statusEl = document.getElementById('status');
-    const resultsEl = document.getElementById('results');
+    const imageSectionEl = document.getElementById('imageSection');
+    const textSectionEl  = document.getElementById('textSection');
+    const imageResultsEl = document.getElementById('imageResults');
+    const textResultsEl  = document.getElementById('textResults');
+    const imageTitleEl   = document.getElementById('imageSectionTitle');
+    const textTitleEl    = document.getElementById('textSectionTitle');
     const dropZone = document.getElementById('dropZone');
     const imageInput = document.getElementById('imageInput');
     const imagePreview = document.getElementById('imagePreview');
@@ -540,18 +592,52 @@
     }
 
     // ── Search logic ──────────────────────────────────────────────
+    async function fetchSplit(fetchFn) {
+      const IMAGE_FILTER = { modality: { $eq: 'image' } };
+      const TEXT_FILTER  = { modality: { $eq: 'text'  } };
+      const [imageHits, textHits] = await Promise.all([
+        fetchFn(IMAGE_FILTER),
+        fetchFn(TEXT_FILTER),
+      ]);
+      return { imageHits, textHits };
+    }
+
+    function renderSplitResults(imageHits, textHits, label) {
+      imageSectionEl.style.display = 'none';
+      textSectionEl.style.display  = 'none';
+      imageResultsEl.innerHTML = '';
+      textResultsEl.innerHTML  = '';
+
+      const total = imageHits.length + textHits.length;
+      if (total === 0) {
+        statusEl.textContent = label ? `${label} — no results found.` : 'No results found.';
+        return;
+      }
+      const summary = `${imageHits.length} image${imageHits.length !== 1 ? 's' : ''} · ${textHits.length} text${textHits.length !== 1 ? 's' : ''}`;
+      statusEl.textContent = label ? `${label} — ${summary}` : summary;
+
+      if (imageHits.length > 0) {
+        imageTitleEl.textContent = `Top Images (${imageHits.length})`;
+        imageResultsEl.innerHTML = imageHits.map(hit => renderCard(hit)).join('');
+        imageSectionEl.style.display = '';
+      }
+      if (textHits.length > 0) {
+        textTitleEl.textContent = `Top Text (${textHits.length})`;
+        textResultsEl.innerHTML = textHits.map(hit => renderCard(hit)).join('');
+        textSectionEl.style.display = '';
+      }
+    }
+
     async function runSearch(searchFn) {
       searchBtn.disabled = true;
       statusEl.innerHTML = '<span class="spinner"></span>Searching…';
-      resultsEl.innerHTML = '';
+      imageSectionEl.style.display = 'none';
+      textSectionEl.style.display  = 'none';
+      imageResultsEl.innerHTML = '';
+      textResultsEl.innerHTML  = '';
       try {
-        const hits = await searchFn();
-        if (hits.length === 0) {
-          statusEl.textContent = 'No results found.';
-          return;
-        }
-        statusEl.textContent = `${hits.length} result${hits.length !== 1 ? 's' : ''}`;
-        resultsEl.innerHTML = hits.map(hit => renderCard(hit)).join('');
+        const { imageHits, textHits } = await searchFn();
+        renderSplitResults(imageHits, textHits, null);
       } catch (err) {
         statusEl.textContent = `Error: ${err.message}`;
       } finally {
@@ -566,34 +652,35 @@
       if (currentMode === 'text') {
         const query = queryInput.value.trim();
         if (!query) return;
-        await runSearch(async () => {
+        await runSearch(() => fetchSplit(async (filter) => {
           const res = await fetch('/api/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: query, top_k: topK }),
+            body: JSON.stringify({ text: query, top_k: topK, metadata_filter: filter }),
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
             throw new Error(err.detail || res.statusText);
           }
           return (await res.json()).hits || [];
-        });
+        }));
       } else {
         if (!selectedFile) {
           statusEl.textContent = 'Please select an image to search.';
           return;
         }
-        await runSearch(async () => {
+        await runSearch(() => fetchSplit(async (filter) => {
           const formData = new FormData();
           formData.append('file', selectedFile);
           formData.append('top_k', topK);
+          formData.append('metadata_filter', JSON.stringify(filter));
           const res = await fetch('/api/search-by-image', { method: 'POST', body: formData });
           if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
             throw new Error(err.detail || res.statusText);
           }
           return (await res.json()).hits || [];
-        });
+        }));
       }
     });
 
@@ -614,20 +701,58 @@
             }
             <div class="card-body">
               <div class="card-name">${escapeHtml(filename)}</div>
+              ${hit.document && hit.document !== filename
+                ? `<button class="btn-toggle-text" onclick="event.stopPropagation();toggleDescription('${escapeHtml(hit.id)}')">Show description</button>
+                   <div class="card-text-body" id="desc-${escapeHtml(hit.id)}">${escapeHtml(hit.document)}</div>`
+                : ''}
               <div class="card-distance">distance ${distance}</div>
             </div>
           </div>`;
       }
 
-      const excerpt = hit.document || '';
+      // Text with associated image
+      if (hit.source_path) {
+        const imgSrc = `/api/image?path=${encodeURIComponent(hit.source_path)}`;
+        const imgFilename = hit.source_path.split('/').pop() || hit.id;
+        return `
+          <div class="card" data-record-id="${escapeHtml(hit.id)}" data-filename="${escapeHtml(imgFilename)}" data-src="${escapeHtml(imgSrc)}" onclick="openLightbox(this)">
+            <img class="card-image" src="${imgSrc}" alt="${escapeHtml(imgFilename)}"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+            /><div class="card-placeholder" style="display:none">${placeholderIcon()}${escapeHtml(imgFilename)}</div>
+            <div class="card-body">
+              <div class="card-name">${escapeHtml(imgFilename)}</div>
+              <button class="btn-toggle-text" onclick="event.stopPropagation();toggleText('${escapeHtml(hit.id)}')">Show text</button>
+              <div class="card-text-body" id="text-${escapeHtml(hit.id)}">${escapeHtml(hit.document || '')}</div>
+              <div class="card-distance">distance ${distance}</div>
+            </div>
+          </div>`;
+      }
+
+      // Text without source_path — text-only fallback
       return `
         <div class="card">
           <div class="card-body" style="padding-top:0.9rem">
             <div class="card-name">${escapeHtml(filename)}</div>
-            <div class="card-excerpt">${escapeHtml(excerpt)}</div>
+            <div class="card-excerpt">${escapeHtml(hit.document || '')}</div>
             <div class="card-distance">distance ${distance}</div>
           </div>
         </div>`;
+    }
+
+    function toggleText(hitId) {
+      const bodyEl = document.getElementById(`text-${hitId}`);
+      if (!bodyEl) return;
+      const visible = bodyEl.classList.toggle('visible');
+      const btn = bodyEl.previousElementSibling;
+      if (btn) btn.textContent = visible ? 'Hide text' : 'Show text';
+    }
+
+    function toggleDescription(hitId) {
+      const bodyEl = document.getElementById(`desc-${hitId}`);
+      if (!bodyEl) return;
+      const visible = bodyEl.classList.toggle('visible');
+      const btn = bodyEl.previousElementSibling;
+      if (btn) btn.textContent = visible ? 'Hide description' : 'Show description';
     }
 
     function placeholderIcon() {
@@ -682,21 +807,21 @@
       btn.disabled = true;
       btn.textContent = 'Searching…';
       try {
-        const res = await fetch('/api/similar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ record_id: activeRecordId, top_k: topK }),
+        const { imageHits, textHits } = await fetchSplit(async (filter) => {
+          const res = await fetch('/api/similar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ record_id: activeRecordId, top_k: topK, metadata_filter: filter }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || res.statusText);
+          }
+          return (await res.json()).hits || [];
         });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: res.statusText }));
-          throw new Error(err.detail || res.statusText);
-        }
-        const data = await res.json();
-        const hits = data.hits || [];
         closeLightbox();
         setView('search');
-        statusEl.textContent = `Similar to: ${sourceName} — ${hits.length} result${hits.length !== 1 ? 's' : ''}`;
-        resultsEl.innerHTML = hits.map(hit => renderCard(hit)).join('');
+        renderSplitResults(imageHits, textHits, `Similar to: ${sourceName}`);
       } catch (err) {
         statusEl.textContent = `Error: ${err.message}`;
         closeLightbox();

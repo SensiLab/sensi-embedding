@@ -40,6 +40,7 @@ services:
       - "3000:3000"
     volumes:
       - /Users/rtdbot/sensi-imessage-retrival/data:/Users/rtdbot/sensi-imessage-retrival/data:ro
+      - /Users/rtdbot/sensi-embedding/data:/Users/rtdbot/sensi-embedding/data:ro
     environment:
       SENSI_HTTP_URL: http://sensi-http:8000
     depends_on:
