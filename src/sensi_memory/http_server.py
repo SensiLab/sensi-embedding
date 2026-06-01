@@ -85,6 +85,12 @@ def count() -> dict[str, int]:
     return {"count": _service().count()}
 
 
+@app.get("/senders", status_code=status.HTTP_200_OK)
+def senders() -> dict[str, list[str]]:
+    """Return a sorted, deduplicated list of every sender value present in the database."""
+    return {"senders": _service().get_all_senders()}
+
+
 @app.post("/ingest/text", response_model=list[StoredRecord], status_code=status.HTTP_200_OK)
 def ingest_text(body: TextIngestRequest) -> list[StoredRecord]:
     """Embed and store text in the vector database, optionally chunking large inputs."""

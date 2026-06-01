@@ -192,6 +192,10 @@ class MemoryService:
         """Return the total number of records in the store."""
         return self._store.count()
 
+    def get_all_senders(self) -> list[str]:
+        """Return a sorted, deduplicated list of every sender in the store."""
+        return self._store.get_all_senders()
+
     def export_all(self) -> list[StoredRecord]:
         """Return all stored records without embeddings."""
         return self._store.get_all_records()

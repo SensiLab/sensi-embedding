@@ -35,6 +35,22 @@ curl http://localhost:8000/count
 
 ---
 
+### `GET /senders`
+
+Return a sorted, deduplicated list of every `sender` value present in the database.
+
+**Response `200 OK`**
+```json
+{ "senders": ["ingest-bot", "my-app", "test-script"] }
+```
+
+**Example request**
+```bash
+curl http://localhost:8000/senders
+```
+
+---
+
 ### `POST /ingest/text`
 
 Embed and store a text string. Large inputs are split into paragraph-aligned chunks (≤ 2000 characters each by default); each chunk becomes its own record but all share the same `document_id`.

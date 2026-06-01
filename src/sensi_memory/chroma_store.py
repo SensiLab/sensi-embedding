@@ -131,6 +131,16 @@ class ChromaMemoryStore:
         """Return the total number of records in the collection."""
         return self._collection.count()
 
+    def get_all_senders(self) -> list[str]:
+        """Return a sorted, deduplicated list of every sender value in the collection."""
+        result = self._collection.get(include=["metadatas"])
+        seen: set[str] = set()
+        for meta in result.get("metadatas") or []:
+            value = str((meta or {}).get("sender", ""))
+            if value:
+                seen.add(value)
+        return sorted(seen)
+
     def get_all_with_embeddings(self) -> tuple[list[StoredRecord], list[list[float]]]:
         """Return every record in the collection together with their raw embedding vectors."""
         result = self._collection.get(include=["documents", "metadatas", "embeddings"])
