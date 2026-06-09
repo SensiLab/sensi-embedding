@@ -68,6 +68,15 @@ class SearchResponse(BaseModel):
     hits: list[SearchHit] = Field(default_factory=list)
 
 
+class EmbeddingResult(BaseModel):
+    id: str
+    embedding: list[float] | None
+
+
+class EmbeddingsResponse(BaseModel):
+    results: list[EmbeddingResult]
+
+
 def build_base_metadata(
     *,
     document_id: str,

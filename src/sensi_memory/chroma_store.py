@@ -118,6 +118,15 @@ class ChromaMemoryStore:
             return None
         return list(embeddings[0])
 
+    def get_embeddings_by_ids(self, record_ids: list[str]) -> dict[str, list[float] | None]:
+        """Return embedding vectors keyed by ID; missing records map to None."""
+        result = self._collection.get(ids=record_ids, include=["embeddings"])
+        found: dict[str, list[float]] = {
+            rid: list(emb)
+            for rid, emb in zip(result.get("ids", []), result.get("embeddings") or [], strict=False)
+        }
+        return {rid: found.get(rid) for rid in record_ids}
+
     def get_all_records(self) -> list[StoredRecord]:
         """Return every record in the collection, excluding embeddings."""
         result = self._collection.get(include=["documents", "metadatas"])

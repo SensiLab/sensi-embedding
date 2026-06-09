@@ -99,6 +99,7 @@ Embed and store a text string. Large inputs are split into paragraph-aligned chu
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `text` | string | yes | The text to embed and store |
+| `sender` | string | yes | Who or what is ingesting this record |
 | `tags` | string[] | no | Labels attached to every chunk |
 | `metadata` | object | no | Arbitrary key/value pairs stored alongside the record |
 | `document_id` | string | no | Stable hex ID linking all chunks; auto-generated if omitted |
@@ -110,6 +111,7 @@ curl -X POST http://localhost:8000/ingest/text \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Paris is the capital of France.",
+    "sender": "ingest-bot",
     "tags": ["geography", "europe"],
     "metadata": {"source": "wiki"}
   }'
@@ -122,13 +124,14 @@ curl -X POST http://localhost:8000/ingest/text \
   {
     "id": "abc123:chunk:0",
     "document_id": "abc123",
+    "sender": "ingest-bot",
     "modality": "text",
+    "tags": ["geography", "europe"],
+    "date": "2026-05-05T12:00:00+00:00",
+    "source_path": null,
+    "object_path": null,
     "document": "Paris is the capital of France.",
     "metadata": {
-      "document_id": "abc123",
-      "modality": "text",
-      "created_at": "2026-05-05T12:00:00+00:00",
-      "tags": "geography,europe",
       "mime_type": "text/plain",
       "chunk_index": 0,
       "chunk_count": 1,
@@ -184,7 +187,10 @@ curl -X POST http://localhost:8000/ingest/image \
 {
   "id": "def456",
   "document_id": "def456",
+  "sender": "ingest-bot",
   "modality": "image",
+  "tags": ["photo", "landscape"],
+  "date": "2026-05-05T12:01:00+00:00",
   "source_path": "/data/images/photo.jpg",
   "object_path": "/data/objects/photo_crop.jpg",
   "document": "Sunset over the mountains",
@@ -319,6 +325,92 @@ curl -X POST http://localhost:8000/search/image \
 
 ---
 
+### `POST /similar`
+
+Find the records most similar to a record that is already stored in the database, identified by its ID. The stored embedding for that record is used as the query vector; the record itself is excluded from the results.
+
+**Content-Type:** `application/json`
+
+**Request body**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `record_id` | string | yes | ID of the stored record to use as the similarity query |
+| `top_k` | integer | no | Number of results to return (default: 5, minimum: 1) |
+| `metadata_filter` | object | no | ChromaDB `where` filter to restrict results by metadata fields |
+
+**Example request**
+```bash
+curl -X POST http://localhost:8000/similar \
+  -H "Content-Type: application/json" \
+  -d '{"record_id": "abc123:chunk:0", "top_k": 3}'
+```
+
+**Response `200 OK`** — same structure as `POST /search`
+
+**Error responses**
+
+| Status | When |
+|---|---|
+| `404` | No record found for the given `record_id` |
+
+---
+
+### `POST /embeddings`
+
+Return the raw embedding vector for one or more records by ID. Records that do not exist are included in the response with `embedding: null`.
+
+**Content-Type:** `application/json`
+
+**Request body**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `record_ids` | string[] | yes | One or more record IDs to fetch embeddings for |
+
+**Example request — single record**
+```bash
+curl -X POST http://localhost:8000/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"record_ids": ["abc123:chunk:0"]}'
+```
+
+**Example request — multiple records**
+```bash
+curl -X POST http://localhost:8000/embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"record_ids": ["abc123:chunk:0", "def456", "unknown-id"]}'
+```
+
+**Response `200 OK`**
+
+```json
+{
+  "results": [
+    {
+      "id": "abc123:chunk:0",
+      "embedding": [0.012, -0.034, 0.087, "...3072 floats total..."]
+    },
+    {
+      "id": "def456",
+      "embedding": [0.045, 0.021, -0.003, "..."]
+    },
+    {
+      "id": "unknown-id",
+      "embedding": null
+    }
+  ]
+}
+```
+
+**Error responses**
+
+| Status | When |
+|---|---|
+| `422` | `record_ids` is empty or missing |
+
+---
+
 ### `GET /export/csv`
 
 Export every record in the database as a CSV file download. Embeddings are excluded. All metadata fields appear as columns; fields not present on a given record are left blank.
@@ -373,11 +465,27 @@ def456,def456,image,Sunset over the mountains,2026-05-05T12:01:00+00:00,image/jp
 |---|---|---|
 | `id` | string | Unique record ID (format: `<document_id>:chunk:<index>` for text, `<document_id>` for images) |
 | `document_id` | string | Groups all chunks belonging to the same original document |
+| `sender` | string | Who or what ingested this record |
 | `modality` | `"text"` \| `"image"` | Content type |
+| `tags` | string[] | Labels attached to the record |
+| `date` | string | ISO 8601 UTC timestamp of when the record was stored |
 | `source_path` | `string \| null` | Original path or URI of the source screenshot/image. Set for image records; `null` for text. |
 | `object_path` | `string \| null` | Path to an artifact extracted from the source image. `null` when not supplied. |
-| `document` | string | The stored text (or image caption/filename for images) |
-| `metadata` | object | All stored metadata fields (see below) |
+| `document` | string | The stored text (or image caption for images) |
+| `metadata` | object | Additional fields: `mime_type`, `chunk_index`, `chunk_count` (text only), and any custom key/value pairs supplied at ingest time |
+
+### `EmbeddingResult`
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | The record ID that was requested |
+| `embedding` | `float[] \| null` | The 3072-dimensional embedding vector, or `null` if the record does not exist |
+
+### `EmbeddingsResponse`
+
+| Field | Type | Description |
+|---|---|---|
+| `results` | `EmbeddingResult[]` | One entry per requested ID, in the same order as the request |
 
 ### `SearchHit`
 
@@ -387,18 +495,16 @@ All fields from `StoredRecord` plus:
 |---|---|---|
 | `distance` | float | Cosine distance from the query embedding (0 = identical, 2 = opposite) |
 
-### Common metadata fields
+### Common `metadata` fields
 
-| Field | Always present | Description |
+These appear inside the `metadata` object of a `StoredRecord`. Top-level fields (`id`, `sender`, `tags`, `date`, etc.) are promoted out of metadata and will not appear here.
+
+| Field | When present | Description |
 |---|---|---|
-| `document_id` | yes | Links chunks to their parent document |
-| `modality` | yes | `"text"` or `"image"` |
-| `created_at` | yes | ISO 8601 UTC timestamp |
-| `mime_type` | yes | e.g. `"text/plain"`, `"image/jpeg"` |
-| `tags` | if provided | Comma-separated tag string |
-| `chunk_index` | text only | Zero-based index of this chunk |
+| `mime_type` | always | e.g. `"text/plain"`, `"image/jpeg"` |
+| `chunk_index` | text only | Zero-based index of this chunk within its document |
 | `chunk_count` | text only | Total number of chunks for the document |
-| `filename` | image only | Original uploaded filename |
+| *(custom fields)* | if supplied | Any extra key/value pairs passed in `metadata` at ingest time |
 
 ---
 

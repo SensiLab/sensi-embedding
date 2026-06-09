@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from sensi_memory.config import Settings
 from sensi_memory.gemini_client import EmbeddingError
-from sensi_memory.models import SearchResponse, StoredRecord
+from sensi_memory.models import EmbeddingsResponse, SearchResponse, StoredRecord
 from sensi_memory.service import MemoryService
 
 
@@ -189,6 +189,12 @@ def search(body: SearchRequest) -> SearchResponse:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
 
+class EmbeddingsRequest(BaseModel):
+    """Request body for the POST /embeddings endpoint."""
+
+    record_ids: list[str] = Field(min_length=1)
+
+
 class SimilarRequest(BaseModel):
     """Request body for the POST /similar endpoint."""
 
@@ -225,6 +231,15 @@ async def search_image(
         return _service().search_image(image_bytes, file.content_type, top_k=top_k, metadata_filter=filter_dict)
     except EmbeddingError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+
+@app.post("/embeddings", response_model=EmbeddingsResponse, status_code=status.HTTP_200_OK)
+def get_embeddings(body: EmbeddingsRequest) -> EmbeddingsResponse:
+    """Return the stored embedding vector for each requested record ID.
+
+    Missing records are included in the response with `embedding: null`.
+    """
+    return _service().get_embeddings_for_records(body.record_ids)
 
 
 @app.post("/similar", response_model=SearchResponse, status_code=status.HTTP_200_OK)

@@ -9,6 +9,8 @@ from sensi_memory.chroma_store import ChromaMemoryStore
 from sensi_memory.config import Settings
 from sensi_memory.gemini_client import GeminiEmbedder
 from sensi_memory.models import (
+    EmbeddingResult,
+    EmbeddingsResponse,
     ImageIngestRequest,
     SearchResponse,
     StoredRecord,
@@ -203,6 +205,13 @@ class MemoryService:
     def export_all(self) -> list[StoredRecord]:
         """Return all stored records without embeddings."""
         return self._store.get_all_records()
+
+    def get_embeddings_for_records(self, record_ids: list[str]) -> EmbeddingsResponse:
+        """Return the stored embedding vector for each requested record ID."""
+        embeddings_map = self._store.get_embeddings_by_ids(record_ids)
+        return EmbeddingsResponse(
+            results=[EmbeddingResult(id=rid, embedding=embeddings_map[rid]) for rid in record_ids]
+        )
 
     def get_graph_data(self, threshold: float = 0.4) -> GraphData:
         """Return image nodes and similarity edges for all stored image records.
