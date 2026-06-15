@@ -8,6 +8,7 @@ import json
 import os
 import tempfile
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
 
 import uvicorn
@@ -54,7 +55,46 @@ class SearchRequest(BaseModel):
 
     text: str
     top_k: int | None = Field(default=None, ge=1)
+    sender: str | None = Field(default=None)
+    modality: str | None = Field(default=None)
+    date_from: datetime | None = Field(default=None)
+    date_to: datetime | None = Field(default=None)
     metadata_filter: dict[str, Any] | None = Field(default=None)
+
+
+def _iso(dt: datetime) -> str:
+    """Normalise a datetime to UTC and return an ISO 8601 string matching stored date format."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat()
+
+
+def _build_filter(
+    sender: str | None,
+    modality: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    metadata_filter: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Merge sender/modality/date-range constraints with an optional caller-supplied filter using $and."""
+    conditions: list[dict[str, Any]] = []
+    if sender is not None:
+        conditions.append({"sender": {"$eq": sender}})
+    if modality is not None:
+        conditions.append({"modality": {"$eq": modality}})
+    if date_from is not None:
+        conditions.append({"date": {"$gte": _iso(date_from)}})
+    if date_to is not None:
+        conditions.append({"date": {"$lte": _iso(date_to)}})
+    if metadata_filter:
+        conditions.append(metadata_filter)
+    if not conditions:
+        return None
+    if len(conditions) == 1:
+        return conditions[0]
+    return {"$and": conditions}
 
 
 @asynccontextmanager
@@ -181,7 +221,7 @@ def search(body: SearchRequest) -> SearchResponse:
         return _service().search_text(
             body.text,
             top_k=body.top_k,
-            metadata_filter=body.metadata_filter,
+            metadata_filter=_build_filter(body.sender, body.modality, body.date_from, body.date_to, body.metadata_filter),
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
@@ -210,6 +250,10 @@ ALLOWED_IMAGE_SEARCH_TYPES = {"image/jpeg", "image/png"}
 async def search_image(
     file: UploadFile = File(...),
     top_k: int = Form(default=5, ge=1),
+    sender: str | None = Form(default=None),
+    modality: str | None = Form(default=None),
+    date_from: str | None = Form(default=None),
+    date_to: str | None = Form(default=None),
     metadata_filter: str | None = Form(default=None),
 ) -> SearchResponse:
     """Embed an uploaded image and search for similar records without storing the image."""
@@ -226,9 +270,25 @@ async def search_image(
                 raise ValueError("metadata_filter must be a JSON object")
         except (json.JSONDecodeError, ValueError) as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    parsed_date_from: datetime | None = None
+    parsed_date_to: datetime | None = None
+    try:
+        if date_from:
+            parsed_date_from = datetime.fromisoformat(date_from)
+        if date_to:
+            parsed_date_to = datetime.fromisoformat(date_to)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid date: {exc}")
+
     image_bytes = await file.read()
     try:
-        return _service().search_image(image_bytes, file.content_type, top_k=top_k, metadata_filter=filter_dict)
+        return _service().search_image(
+            image_bytes,
+            file.content_type,
+            top_k=top_k,
+            metadata_filter=_build_filter(sender, modality, parsed_date_from, parsed_date_to, filter_dict),
+        )
     except EmbeddingError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
@@ -256,9 +316,13 @@ def similar(body: SimilarRequest) -> SearchResponse:
 
 
 @app.get("/export/csv", status_code=status.HTTP_200_OK)
-def export_csv() -> StreamingResponse:
-    """Return all stored records as a CSV file, excluding embeddings."""
-    records = _service().export_all()
+def export_csv(include_embeddings: bool = Query(default=False)) -> StreamingResponse:
+    """Return all stored records as a CSV file. Pass include_embeddings=true to include embedding vectors."""
+    if include_embeddings:
+        records, embeddings_list = _service().export_all_with_embeddings()
+    else:
+        records = _service().export_all()
+        embeddings_list = None
 
     all_meta_keys: list[str] = []
     seen: set[str] = set()
@@ -268,13 +332,14 @@ def export_csv() -> StreamingResponse:
                 seen.add(k)
                 all_meta_keys.append(k)
 
-    fieldnames = ["id", "document_id", "sender", "modality", "tags", "date", "source_path", "object_path", "document"] + all_meta_keys
+    base_fields = ["id", "document_id", "sender", "modality", "tags", "date", "source_path", "object_path", "document"]
+    fieldnames = base_fields + all_meta_keys + (["embedding"] if include_embeddings else [])
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
-    for r in records:
-        writer.writerow({
+    for i, r in enumerate(records):
+        row: dict[str, Any] = {
             "id": r.id,
             "document_id": r.document_id,
             "sender": r.sender,
@@ -285,7 +350,10 @@ def export_csv() -> StreamingResponse:
             "object_path": r.object_path or "",
             "document": r.document,
             **r.metadata,
-        })
+        }
+        if include_embeddings and embeddings_list is not None:
+            row["embedding"] = json.dumps(embeddings_list[i])
+        writer.writerow(row)
 
     buf.seek(0)
     return StreamingResponse(

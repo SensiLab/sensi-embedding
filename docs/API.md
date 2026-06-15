@@ -222,9 +222,15 @@ Embed a query string and return the most semantically similar records from the d
 |---|---|---|---|
 | `text` | string | yes | The search query |
 | `top_k` | integer | no | Number of results to return (default: 5, minimum: 1) |
-| `metadata_filter` | object | no | ChromaDB `where` filter to restrict results by metadata fields |
+| `sender` | string | no | Restrict results to records from this sender |
+| `modality` | string | no | Restrict results to `"text"` or `"image"` records |
+| `date_from` | string (ISO 8601) | no | Restrict results to records on or after this datetime |
+| `date_to` | string (ISO 8601) | no | Restrict results to records on or before this datetime |
+| `metadata_filter` | object | no | ChromaDB `where` filter for additional metadata constraints |
 
-**Example request**
+All filter fields are combined with `$and` when more than one is provided. Omit `date_from` for "all before X", omit `date_to` for "all after X", provide both for a bounded range.
+
+**Example — basic query**
 ```bash
 curl -X POST http://localhost:8000/search \
   -H "Content-Type: application/json" \
@@ -234,14 +240,36 @@ curl -X POST http://localhost:8000/search \
   }'
 ```
 
-**Example with metadata filter**
+**Example — all after a date**
 ```bash
 curl -X POST http://localhost:8000/search \
   -H "Content-Type: application/json" \
   -d '{
     "text": "mountain landscape",
-    "top_k": 5,
-    "metadata_filter": {"modality": {"$eq": "image"}}
+    "date_from": "2026-05-01T00:00:00Z"
+  }'
+```
+
+**Example — all before a date**
+```bash
+curl -X POST http://localhost:8000/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "mountain landscape",
+    "date_to": "2026-05-31T23:59:59Z"
+  }'
+```
+
+**Example — date range with sender and modality**
+```bash
+curl -X POST http://localhost:8000/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "mountain landscape",
+    "sender": "ingest-bot",
+    "modality": "image",
+    "date_from": "2026-05-01T00:00:00Z",
+    "date_to": "2026-05-31T23:59:59Z"
   }'
 ```
 
@@ -289,12 +317,21 @@ Embed an uploaded image and return the most semantically similar records from th
 |---|---|---|---|
 | `file` | file | yes | PNG or JPEG image file |
 | `top_k` | integer | no | Number of results to return (default: 5, minimum: 1) |
+| `sender` | string | no | Restrict results to records from this sender |
+| `modality` | string | no | Restrict results to `"text"` or `"image"` records |
+| `date_from` | string (ISO 8601) | no | Restrict results to records on or after this datetime |
+| `date_to` | string (ISO 8601) | no | Restrict results to records on or before this datetime |
+| `metadata_filter` | string | no | JSON `where` filter for additional metadata constraints |
 
 **Example request**
 ```bash
 curl -X POST http://localhost:8000/search/image \
   -F "file=@/path/to/photo.jpg" \
-  -F "top_k=5"
+  -F "top_k=5" \
+  -F "sender=ingest-bot" \
+  -F "modality=image" \
+  -F "date_from=2026-05-01T00:00:00Z" \
+  -F "date_to=2026-05-31T23:59:59Z"
 ```
 
 **Response `200 OK`** — same structure as `POST /search`

@@ -206,6 +206,10 @@ class MemoryService:
         """Return all stored records without embeddings."""
         return self._store.get_all_records()
 
+    def export_all_with_embeddings(self) -> tuple[list[StoredRecord], list[list[float]]]:
+        """Return all stored records together with their embedding vectors."""
+        return self._store.get_all_with_embeddings()
+
     def get_embeddings_for_records(self, record_ids: list[str]) -> EmbeddingsResponse:
         """Return the stored embedding vector for each requested record ID."""
         embeddings_map = self._store.get_embeddings_by_ids(record_ids)
